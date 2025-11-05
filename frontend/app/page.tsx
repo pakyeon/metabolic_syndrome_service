@@ -2,52 +2,19 @@
 
 import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import styles from "./workspace.module.css";
 import { PatientSummary } from "../components/patient/PatientSummary";
 import { ChatWorkspace } from "../components/chat/ChatWorkspace";
 import { PreparationSidebar } from "../components/preparation/PreparationSidebar";
+import { ReferencesPanel, Citation } from "../components/references/ReferencesPanel";
 import { QuickActions, QuickAction } from "../components/actions/QuickActions";
 import { ModeSwitch } from "../components/actions/ModeSwitch";
 import { TransparencyItem, useTransparencyStream } from "../hooks/useTransparencyStream";
 import { SafetyBannerState, useSafetyEnvelope } from "../hooks/useSafetyEnvelope";
 import { useStreamingRetrieval, AGUIMessage } from "../hooks/useStreamingRetrieval";
-
-const patient = {
-  name: "김하늘",
-  age: 52,
-  visitDate: "2025-10-28",
-  riskLevel: "moderate" as const,
-  biomarkerHighlights: [
-    {
-      label: "공복 혈당",
-      value: "124 mg/dL",
-      status: "elevated" as const,
-      guidance: "아침 조깅 전 간단한 간식과 주 3회 근력운동을 권장하세요."
-    },
-    {
-      label: "허리둘레",
-      value: "90 cm",
-      status: "critical" as const,
-      guidance: "생활습관 카드에 있는 스트레칭과 업무 중 2시간마다 5분 걷기를 강조하세요."
-    },
-    {
-      label: "HDL 콜레스테롤",
-      value: "46 mg/dL",
-      status: "optimal" as const,
-      guidance: "최근 상승 추세이므로 긍정적 피드백을 제공하고 지속을 격려하세요."
-    }
-  ],
-  lifestyleHighlights: [
-    {
-      title: "활동 패턴",
-      detail: "평일 만보 걷기 달성률 78%. 야간 근무 이후 회복이 늦어지는 경향."
-    },
-    {
-      title: "식습관",
-      detail: "야식 빈도 주 3회 → 주 1회로 감소. 단백질 위주의 간식 아이디어 제공 필요."
-    }
-  ]
-};
+import { usePatientData } from "../hooks/usePatientData";
+import { formatBiomarkers, formatLifestyle } from "../lib/formatters";
 
 type WorkspaceMessage = {
   id: string;
@@ -78,10 +45,11 @@ const demoConversation: WorkspaceMessage[] = [
   }
 ];
 
-const prepCards = [
+// Demo data for preparation mode (kept for Phase 1, will be replaced with backend data in Week 2)
+const demoPrepCards = [
   {
     title: "야간 근무 후 혈당 관리 질문 예상",
-    body: "‘야간 근무 끝나면 너무 피곤해서 바로 잠들고 싶은데 운동 대신 할 수 있는 게 있을까요?’",
+    body: "'야간 근무 끝나면 너무 피곤해서 바로 잠들고 싶은데 운동 대신 할 수 있는 게 있을까요?'",
     tag: "혈당"
   },
   {
@@ -91,7 +59,7 @@ const prepCards = [
   }
 ];
 
-const observations = [
+const demoObservations = [
   {
     label: "스트레스 신호",
     detail: "설문에서 직장 스트레스 8/10 → 심호흡 루틴 및 짧은 명상 카드 리마인드",
@@ -169,12 +137,60 @@ function createMessage(role: WorkspaceMessage["role"], content: string): Workspa
 }
 
 export default function HomePage() {
+  // Get patient ID from URL query parameter
+  const searchParams = useSearchParams();
+  const patientId = searchParams.get('patient_id');
+
+  // Fetch patient data from backend
+  const { data: patientData, loading: patientLoading, error: patientError } = usePatientData(patientId);
+
   const [mode, setMode] = useState<"preparation" | "live">("preparation");
   const [draftPrompt, setDraftPrompt] = useState("");
   const [lastActionId, setLastActionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<WorkspaceMessage[]>(demoConversation);
   const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
   const lastStreamingStateRef = useRef({ isStreaming: false, answer: "", citations: [] as string[], error: null as string | null });
+
+  // Preparation workflow state
+  const [isPreparationRunning, setIsPreparationRunning] = useState(false);
+  const [preparationStage, setPreparationStage] = useState<string | null>(null);
+  const [preparationComplete, setPreparationComplete] = useState(false);
+
+  // Session management state
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  // UI state for dynamic layout
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+
+  // Citations state for References Panel
+  const [citations, setCitations] = useState<Citation[]>([]);
+
+  // Auto-save messages to database
+  const saveMessage = async (role: "user" | "assistant", content: string) => {
+    if (!sessionId) {
+      console.warn("No session ID, skipping message save");
+      return;
+    }
+
+    try {
+      await fetch(`${backendBaseUrl}/v1/sessions/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          role: role,
+          content: content,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            mode: mode,
+          },
+        }),
+      });
+    } catch (err) {
+      console.error("Error saving message:", err);
+      // Silent failure - don't block user experience
+    }
+  };
 
   // Use streaming retrieval hook
   const {
@@ -218,12 +234,30 @@ export default function HomePage() {
           : streamingAnswer;
         const assistantMessage = createMessage("assistant", answerText);
         setMessages((prev) => [...prev, assistantMessage]);
+
+        // Save assistant message to database
+        saveMessage("assistant", answerText);
+
+        // Update citations for References Panel
+        if (streamingCitations.length > 0) {
+          const newCitations: Citation[] = streamingCitations.map((citation, idx) => ({
+            id: `citation-${Date.now()}-${idx}`,
+            title: citation,
+            content: `참고 문서: ${citation}`,
+            relevance_score: 0.85, // Default score (backend should provide this in future)
+            source: citation,
+          }));
+          setCitations(newCitations);
+        }
       } else if (streamingError) {
         const assistantMessage = createMessage(
           "assistant",
           `오류가 발생했습니다: ${streamingError}`
         );
         setMessages((prev) => [...prev, assistantMessage]);
+
+        // Save error message to database
+        saveMessage("assistant", `오류: ${streamingError}`);
       }
     }
 
@@ -236,16 +270,47 @@ export default function HomePage() {
     };
   }, [isStreaming, streamingAnswer, streamingCitations, streamingError]);
 
+  // Format patient data for display and CopilotKit
+  const biomarkerHighlights = useMemo(
+    () => formatBiomarkers(patientData?.latestExam || null, patientData?.patient.sex),
+    [patientData]
+  );
+
+  const lifestyleHighlights = useMemo(
+    () => formatLifestyle(patientData?.survey || null),
+    [patientData]
+  );
+
+  const patientForDisplay = useMemo(() => {
+    if (!patientData) return null;
+
+    return {
+      name: patientData.patient.name,
+      age: patientData.patient.age,
+      visitDate: patientData.latestExam?.exam_at
+        ? new Date(patientData.latestExam.exam_at).toLocaleDateString('ko-KR')
+        : '-',
+      riskLevel: (patientData.latestExam?.risk_level as 'low' | 'moderate' | 'high') || 'low',
+      biomarkerHighlights,
+      lifestyleHighlights,
+    };
+  }, [patientData, biomarkerHighlights, lifestyleHighlights]);
+
   // Provide patient context to CopilotKit
   useCopilotReadable({
     description: "Current patient information for metabolic syndrome counseling",
     value: JSON.stringify({
-      name: patient.name,
-      age: patient.age,
-      visitDate: patient.visitDate,
-      riskLevel: patient.riskLevel,
-      biomarkers: patient.biomarkerHighlights,
-      lifestyle: patient.lifestyleHighlights,
+      patientId: patientId,
+      name: patientData?.patient.name,
+      age: patientData?.patient.age,
+      sex: patientData?.patient.sex,
+      visitDate: patientData?.latestExam?.exam_at,
+      riskLevel: patientData?.latestExam?.risk_level,
+      riskFactors: patientData?.latestExam?.risk_factors,
+      biomarkers: biomarkerHighlights,
+      lifestyle: lifestyleHighlights,
+      latestExam: patientData?.latestExam,
+      survey: patientData?.survey,
     }),
   });
 
@@ -325,12 +390,92 @@ export default function HomePage() {
     const counselorMessage = createMessage("counselor", prompt);
     setMessages((prev) => [...prev, counselorMessage]);
 
+    // Save user message to database
+    await saveMessage("user", prompt);
+
     // Start streaming from backend
     // The answer will be automatically added to messages by the useEffect hook
     await streamQuestion(prompt);
 
     setDraftPrompt("");
   };
+
+  // Preparation workflow handler
+  const handlePreparationStart = async () => {
+    setIsPreparationRunning(true);
+    setPreparationComplete(false);
+
+    const stages = [
+      "환자 기록 검색 중...",
+      "관련 운동 가이드라인 찾는 중...",
+      "식단 권장사항 분석 중...",
+      "예상 질문 생성 중...",
+      "전달 방식 예시 생성 중...",
+    ];
+
+    // Simulate preparation workflow (backend preparation mode not fully implemented yet)
+    for (let i = 0; i < stages.length; i++) {
+      setPreparationStage(stages[i]);
+      // Simulate processing time
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+
+    setPreparationStage(null);
+    setIsPreparationRunning(false);
+    setPreparationComplete(true);
+  };
+
+  // Consultation start handler
+  const handleConsultationStart = () => {
+    setMode("live");
+    setSidebarExpanded(false);  // Auto-collapse sidebar in live mode
+    // Auto-scroll to chat input (optional)
+    // Could add toast notification here in future
+  };
+
+  // Auto-expand sidebar in preparation mode
+  useEffect(() => {
+    if (mode === "preparation" && !sidebarExpanded) {
+      setSidebarExpanded(true);
+    }
+  }, [mode, sidebarExpanded]);
+
+  // Create session when patient is selected
+  useEffect(() => {
+    if (!patientId || !patientData) return;
+
+    async function createSession() {
+      try {
+        const response = await fetch(`${backendBaseUrl}/v1/sessions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patient_id: patientId,
+            user_id: "counselor_demo",  // Hardcoded as per user requirement
+            metadata: {
+              patient_name: patientData.patient.name,
+              created_from: "workspace",
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to create session: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        setSessionId(data.session_id);
+        console.log("Session created:", data.session_id);
+      } catch (err) {
+        console.error("Error creating session:", err);
+      }
+    }
+
+    // Only create session if we don't have one yet
+    if (!sessionId) {
+      createSession();
+    }
+  }, [patientId, patientData, sessionId, backendBaseUrl]);
 
   const lastAction = useMemo(
     () => quickActions.find((action) => action.id === lastActionId) ?? null,
@@ -339,21 +484,105 @@ export default function HomePage() {
 
   const slaSeconds = mode === "live" ? 10 : 20;
 
+  // Handle loading and error states
+  if (!patientId) {
+    return (
+      <div className={styles.page}>
+        <div style={{ padding: '2rem', textAlign: 'center' }}>
+          <h2>환자를 선택해주세요</h2>
+          <p>환자 목록에서 상담할 환자를 선택해주세요.</p>
+          <a href="/patients" style={{ color: '#3541ff', textDecoration: 'underline' }}>
+            환자 목록으로 이동
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (patientLoading) {
+    return (
+      <div className={styles.page}>
+        <div style={{ padding: '2rem', textAlign: 'center' }}>
+          <p>환자 데이터를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (patientError || !patientData) {
+    return (
+      <div className={styles.page}>
+        <div style={{ padding: '2rem', textAlign: 'center', color: '#dc2626' }}>
+          <h2>오류가 발생했습니다</h2>
+          <p>{patientError?.message || '환자 데이터를 불러올 수 없습니다.'}</p>
+          <a href="/patients" style={{ color: '#3541ff', textDecoration: 'underline' }}>
+            환자 목록으로 돌아가기
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.page}>
       <div className={styles.toolbar}>
         <div className={styles.toolbarGroup}>
-          <ModeSwitch mode={mode} onModeChange={setMode} />
+          <ModeSwitch mode={mode} onModeChange={setMode} disabled={isPreparationRunning} />
+
+          {/* Workflow Buttons */}
+          <button
+            onClick={handlePreparationStart}
+            disabled={isPreparationRunning || !patientId}
+            style={{
+              padding: "0.5rem 1rem",
+              backgroundColor: isPreparationRunning ? "#9ca3af" : "#3541ff",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              cursor: isPreparationRunning || !patientId ? "not-allowed" : "pointer",
+              transition: "background-color 0.2s",
+            }}
+          >
+            {isPreparationRunning ? "상담 준비 중..." : "상담 준비 시작"}
+          </button>
+
+          <button
+            onClick={handleConsultationStart}
+            disabled={!preparationComplete}
+            style={{
+              padding: "0.5rem 1rem",
+              backgroundColor: preparationComplete ? "#16a34a" : "#d1d5db",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              cursor: preparationComplete ? "pointer" : "not-allowed",
+              transition: "background-color 0.2s",
+            }}
+          >
+            상담 시작
+          </button>
         </div>
         <div className={styles.toolbarGroup}>
-          <span className={styles.slaIndicator}>
-            {mode === "live" ? "실시간 모드 SLA: 답변 시작 10초 이내" : "준비 모드 SLA: 20초 내 요약 제공"}
-          </span>
-          {lastAction ? (
+          {isPreparationRunning && preparationStage ? (
             <span style={{ fontSize: "0.85rem", color: "#3541ff", fontWeight: 600 }}>
-              최근 빠른 액션: {lastAction.label}
+              {preparationStage}
             </span>
-          ) : null}
+          ) : (
+            <>
+              <span className={styles.slaIndicator}>
+                {mode === "live" ? "실시간 모드 SLA: 답변 시작 10초 이내" : "준비 모드 SLA: 20초 내 요약 제공"}
+              </span>
+              {lastAction ? (
+                <span style={{ fontSize: "0.85rem", color: "#3541ff", fontWeight: 600 }}>
+                  최근 빠른 액션: {lastAction.label}
+                </span>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
       <section className={styles.quickActions} aria-label="빠른 액션">
@@ -372,7 +601,7 @@ export default function HomePage() {
         </div>
       </section>
       <div className={styles.workspace}>
-        <PatientSummary {...patient} />
+        {patientForDisplay && <PatientSummary {...patientForDisplay} />}
         <ChatWorkspace
           messages={conversation}
           mode={mode}
@@ -385,7 +614,18 @@ export default function HomePage() {
           transparencyEvents={transparencyEvents}
           activeTransparencyIndex={activeIndex}
         />
-        <PreparationSidebar forecastedQuestions={prepCards} coachingObservations={observations} />
+        <PreparationSidebar
+          forecastedQuestions={demoPrepCards}
+          coachingObservations={demoObservations}
+          patient={patientData?.patient}
+          exam={patientData?.latestExam}
+          survey={patientData?.survey}
+          expanded={sidebarExpanded}
+          onToggle={() => setSidebarExpanded(!sidebarExpanded)}
+        />
+        {mode === "live" && citations.length > 0 && (
+          <ReferencesPanel citations={citations} />
+        )}
       </div>
     </div>
   );
