@@ -7,11 +7,13 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Dict, List, Sequence
 
 from langgraph.graph import END, StateGraph
 
 from ..analysis import QuestionAnalyzer, QuestionAnalysisResult, SafetyLevel
+from ..cache import FAQCache
 from ..ingestion import Chunk, IngestionPipeline, iter_chunks
 from ..ingestion.embedding import EmbeddingConfig, EmbeddingProvider, resolve_embedding_config
 from ..providers import get_main_llm, get_small_llm
@@ -110,6 +112,16 @@ class RetrievalPipeline:
         self.default_vector_top_k = int(os.getenv("METABOLIC_VECTOR_TOP_K", "3"))
         self.graph_top_k = int(os.getenv("METABOLIC_GRAPH_TOP_K", "5"))
         self.max_evidence = int(os.getenv("METABOLIC_EVIDENCE_LIMIT", "5"))
+
+        # Initialize FAQ cache
+        cache_dir = Path(os.getenv("METABOLIC_CACHE_DIR", ".cache/metabolic_backend"))
+        cache_file = cache_dir / "faq_cache.json"
+        self.faq_cache = FAQCache(cache_file)
+
+        # Populate with default FAQs if cache is empty
+        if self.faq_cache.size() == 0:
+            self.faq_cache.populate_defaults()
+            LOGGER.info("Initialized FAQ cache with default entries")
 
         self._chunks = list(chunks) if chunks is not None else list(iter_chunks())
         disable_ingestion = os.getenv("METABOLIC_DISABLE_INGESTION") is not None
@@ -221,6 +233,31 @@ class RetrievalPipeline:
     # ------------------------------------------------------------------
     def run(self, question: str, *, context: str | None = None, mode: str = "live") -> RetrievalOutput:
         start_total = time.perf_counter()
+
+        # Check FAQ cache for live mode (skip for preparation mode)
+        if mode == "live":
+            cached_answer = self.faq_cache.get(question, similarity_threshold=0.85)
+            if cached_answer:
+                cache_duration = time.perf_counter() - start_total
+                LOGGER.info(f"FAQ cache hit for: {question[:50]}... (took {cache_duration*1000:.1f}ms)")
+
+                # Return cached result with minimal processing
+                return RetrievalOutput(
+                    analysis=QuestionAnalysisResult(
+                        domain="metabolic",
+                        complexity="simple",
+                        strategy="cached",
+                        safety=SafetyLevel.CLEAR,
+                        reasoning="Cached FAQ response",
+                    ),
+                    answer=cached_answer,
+                    citations=["FAQ Cache"],
+                    observations=["FAQ cache hit - instant response"],
+                    safety=SafetyEnvelope(level=SafetyLevel.CLEAR, guidance="", scrubbed=cached_answer),
+                    timings={"total": cache_duration, "cache_lookup": cache_duration},
+                    evidence=[],
+                )
+
         state = self._graph.invoke(
             {
                 "question": question,
