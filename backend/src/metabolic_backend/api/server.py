@@ -20,6 +20,8 @@ from ..ingestion.pipeline import Chunk
 from ..logging_utils import log_event
 from ..metrics import latency_summary, record_latency
 from ..orchestrator import RetrievalPipeline, serialize_retrieval_output
+from .patients import router as patients_router
+from .sessions import router as sessions_router
 
 
 class RetrieveRequest(BaseModel):
@@ -198,6 +200,12 @@ def create_app() -> FastAPI:
     @app.get("/metrics/latency", tags=["metrics"])
     def latency_metrics() -> Dict[str, Any]:
         return {"latency": latency_summary()}
+
+    # Include patient data endpoints
+    app.include_router(patients_router)
+
+    # Include session management endpoints
+    app.include_router(sessions_router)
 
     return app
 
