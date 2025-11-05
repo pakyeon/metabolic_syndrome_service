@@ -1,0 +1,137 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 2rem 0;
+}
+
+.toolbarGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.quickActions {
+  padding: 0 2rem;
+}
+
+.quickActionsInner {
+  background: #ffffff;
+  border: 1px solid rgba(28, 35, 51, 0.08);
+  border-radius: 1rem;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 10px 28px rgba(28, 35, 51, 0.06);
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 22rem minmax(0, 1fr) 25rem;
+  gap: 1.5rem;
+  padding: 0 2rem 2rem;
+  min-height: 100vh;
+}
+
+.panel {
+  background: #ffffffee;
+  border-radius: 1rem;
+  box-shadow: 0 12px 24px rgba(28, 35, 51, 0.08);
+  border: 1px solid rgba(28, 35, 51, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panelHeader {
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid rgba(28, 35, 51, 0.08);
+}
+
+.panelHeader h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.panelBody {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.modeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border: 1px solid rgba(28, 35, 51, 0.1);
+  background: #ffffff;
+  color: #1c2333;
+}
+
+.slaIndicator {
+  font-size: 0.85rem;
+  color: #5b6478;
+}
+
+@media (max-width: 1280px) {
+  .toolbar {
+    padding: 1.25rem 1.5rem 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .quickActions {
+    padding: 0 1.5rem;
+  }
+
+  .workspace {
+    grid-template-columns: 18rem minmax(0, 1fr);
+    grid-template-areas:
+      "patient main"
+      "prep prep";
+  }
+
+  .patientPanel {
+    grid-area: patient;
+  }
+
+  .mainPanel {
+    grid-area: main;
+  }
+
+  .prepPanel {
+    grid-area: prep;
+  }
+}
+
+@media (max-width: 960px) {
+  .toolbar {
+    padding: 1rem;
+  }
+
+  .quickActions {
+    padding: 0 1rem;
+  }
+
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "patient"
+      "main"
+      "prep";
+    padding: 1.25rem;
+  }
+
+  .panel {
+    box-shadow: 0 8px 18px rgba(28, 35, 51, 0.08);
+  }
+}

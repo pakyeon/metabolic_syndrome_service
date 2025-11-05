@@ -1,0 +1,38 @@
+.grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.button {
+  text-align: left;
+  padding: 0.95rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(28, 35, 51, 0.12);
+  background: #f7f8ff;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.button:hover,
+.button:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px rgba(53, 65, 255, 0.15);
+  border-color: rgba(53, 65, 255, 0.6);
+  outline: none;
+}
+
+.label {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.helper {
+  color: #5b6478;
+  font-size: 0.9rem;
+}

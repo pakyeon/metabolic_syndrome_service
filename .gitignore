@@ -1,0 +1,112 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+*.pyo
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# LLM 관련 캐시 및 출력
+logs/
+checkpoints/
+runs/
+output/
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.h5
+
+# HuggingFace Transformers
+*.log
+*.tfevents.*
+.cache/
+*.ds_store
+*.tar.gz
+*.zip
+
+# Datasets
+*.jsonl
+*.csv
+*.tsv
+
+# Tokenizers & Vocab
+tokenizer_config.json
+tokenizer.json
+vocab.txt
+merges.txt
+special_tokens_map.json
+
+# 환경 변수 설정
+.env
+
+# Weights & Biases
+wandb/
+
+# IDE 설정
+.vscode/
+.idea/
+
+# Jupyter 설정
+.ipython/
+.jupyter/
+
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+
+# 시스템 파일
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dev-debug.log
+# Dependency directories
+node_modules/
+# Environment variables
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+
+# Frontend build/test artifacts
+frontend/.next/
+frontend/.turbo/
+frontend/playwright-report/
+frontend/test-results/
+
+# Coverage reports
+.coverage
+htmlcov/
+coverage/
+
+# Local tooling
+.cursor/
+.taskmaster/
+# Application data & generated datasets (keep outside VCS for privacy)
+app_data/
+data/documents/raw/
+data/documents/parsed/
+data/surveys/survey_data.json
+data/tests/test_data.json
