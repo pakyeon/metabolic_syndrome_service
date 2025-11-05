@@ -9,10 +9,7 @@ import re
 from dataclasses import replace
 from typing import Iterable, List, Sequence
 
-try:
-    from graphiti_core import Graphiti  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
-    Graphiti = None  # type: ignore[assignment]
+from graphiti_core import Graphiti  # type: ignore
 
 from ..config import get_settings
 from ..ingestion import Chunk, iter_chunks
@@ -39,15 +36,20 @@ class GraphRetriever:
         self._user = user or settings.neo4j_user
         self._password = password or settings.neo4j_password
         self._llm_client = llm_client or self._create_default_llm_client()
-        self._graphiti_ready = bool(Graphiti is not None and self._uri and self._user and self._password)
+        self._graphiti_ready = bool(
+            Graphiti is not None and self._uri and self._user and self._password
+        )
         if not self._graphiti_ready:
-            LOGGER.debug("Graphiti search unavailable; graph retrieval will use local cache fallback.")
+            LOGGER.debug(
+                "Graphiti search unavailable; graph retrieval will use local cache fallback."
+            )
 
     # ------------------------------------------------------------------
     def _create_default_llm_client(self):
         """Create default LLM client for Graphiti (OpenAI with structured output support)."""
         try:
             from openai import AsyncOpenAI
+
             api_key = os.getenv("OPENAI_API_KEY")
             if api_key:
                 return AsyncOpenAI(api_key=api_key)
@@ -91,12 +93,7 @@ class GraphRetriever:
         """Internal async search method for Graphiti."""
         assert Graphiti is not None  # for type checkers
         if self._llm_client is not None:
-            client = Graphiti(
-                self._uri,
-                self._user,
-                self._password,
-                llm_client=self._llm_client
-            )
+            client = Graphiti(self._uri, self._user, self._password, llm_client=self._llm_client)
         else:
             client = Graphiti(self._uri, self._user, self._password)
         try:
@@ -147,13 +144,14 @@ class GraphRetriever:
             # Try nest_asyncio to allow nested event loops
             try:
                 import nest_asyncio
+
                 nest_asyncio.apply()
                 return asyncio.run(self._search_graphiti(query, limit))
             except Exception as nested_exc:
                 LOGGER.warning(
                     "Event loop already running; skipping Graphiti search. "
                     "Install nest_asyncio or run outside async context: %s",
-                    exc
+                    exc,
                 )
                 return []
 
