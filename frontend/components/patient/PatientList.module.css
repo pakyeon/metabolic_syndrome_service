@@ -1,0 +1,147 @@
+.container {
+  max-width: 1400px;
+  margin: 2rem auto;
+  padding: 0 2rem;
+}
+
+.header {
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.header p {
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+.loadingContainer,
+.errorContainer {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.loadingContainer {
+  color: #6b7280;
+  font-size: 1.125rem;
+}
+
+.errorContainer {
+  color: #dc2626;
+}
+
+.errorContainer h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.patientTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.patientTable thead {
+  background: #f9fafb;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.patientTable th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.patientTable tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.15s ease;
+}
+
+.clickableRow {
+  cursor: pointer;
+}
+
+.clickableRow:hover {
+  background-color: #f9fafb;
+}
+
+.clickableRow:active {
+  background-color: #f3f4f6;
+}
+
+.patientTable td {
+  padding: 1rem;
+  color: #1f2937;
+  font-size: 0.9375rem;
+}
+
+.riskBadge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.riskHigh {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.riskModerate {
+  background-color: #fef3c7;
+  color: #f59e0b;
+}
+
+.riskLow {
+  background-color: #d1fae5;
+  color: #16a34a;
+}
+
+.biomarkerValue {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-size: 0.875rem;
+}
+
+.biomarkerCritical {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.biomarkerElevated {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.biomarkerOptimal {
+  color: #16a34a;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #9ca3af;
+}
+
+.emptyState p {
+  font-size: 1.125rem;
+  margin-bottom: 0.5rem;
+}
+
+.emptyState small {
+  font-size: 0.875rem;
+  color: #d1d5db;
+}
