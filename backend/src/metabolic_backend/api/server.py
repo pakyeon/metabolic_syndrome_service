@@ -12,6 +12,7 @@ import time
 from typing import Any, Dict, Literal
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -40,6 +41,15 @@ def create_app() -> FastAPI:
     configure_logging()
 
     app = FastAPI(title="Metabolic Counselor Backend", version="0.1.0")
+
+    # Add CORS middleware to allow frontend requests
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     disable_ingestion = os.getenv("METABOLIC_DISABLE_INGESTION") is not None
 

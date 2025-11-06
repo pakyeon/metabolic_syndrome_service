@@ -23,6 +23,22 @@ type WorkspaceMessage = {
   timestamp: string;
 };
 
+// Preparation analysis result from backend
+interface PreparationAnalysis {
+  keyPoints: string[];  // 핵심 포인트 3-5개
+  anticipatedQuestions: Array<{
+    question: string;
+    answer: string;
+    source?: string;
+  }>;
+  deliveryExamples: Array<{
+    topic: string;
+    bad: string;
+    good: string;
+  }>;
+  warnings: string[];  // 주의사항
+}
+
 const demoConversation: WorkspaceMessage[] = [
   {
     id: "msg-1",
@@ -155,6 +171,7 @@ export default function HomePage() {
   const [isPreparationRunning, setIsPreparationRunning] = useState(false);
   const [preparationStage, setPreparationStage] = useState<string | null>(null);
   const [preparationComplete, setPreparationComplete] = useState(false);
+  const [preparationAnalysis, setPreparationAnalysis] = useState<PreparationAnalysis | null>(null);
 
   // Session management state
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -400,29 +417,187 @@ export default function HomePage() {
     setDraftPrompt("");
   };
 
-  // Preparation workflow handler
+  // Preparation workflow handler with real backend integration
   const handlePreparationStart = async () => {
-    setIsPreparationRunning(true);
-    setPreparationComplete(false);
-
-    const stages = [
-      "환자 기록 검색 중...",
-      "관련 운동 가이드라인 찾는 중...",
-      "식단 권장사항 분석 중...",
-      "예상 질문 생성 중...",
-      "전달 방식 예시 생성 중...",
-    ];
-
-    // Simulate preparation workflow (backend preparation mode not fully implemented yet)
-    for (let i = 0; i < stages.length; i++) {
-      setPreparationStage(stages[i]);
-      // Simulate processing time
-      await new Promise(resolve => setTimeout(resolve, 1500));
+    if (!patientId || !patientData) {
+      console.error("No patient data available for preparation");
+      return;
     }
 
-    setPreparationStage(null);
-    setIsPreparationRunning(false);
-    setPreparationComplete(true);
+    setIsPreparationRunning(true);
+    setPreparationComplete(false);
+    setPreparationAnalysis(null);
+
+    try {
+      // Prepare context with full patient data
+      const context = JSON.stringify({
+        patient_id: patientId,
+        patient: patientData.patient,
+        latest_exam: patientData.latestExam,
+        survey: patientData.survey,
+      });
+
+      const response = await fetch(`${backendBaseUrl}/v1/retrieve/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: "이번 상담을 위한 준비 자료를 생성해줘. 핵심 포인트, 예상 질문과 권장 답변, 전달 방식 예시, 주의사항을 포함해서 작성해줘.",
+          context: context,
+          mode: "preparation",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend error: ${response.statusText}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No response body reader available");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalAnswer = "";
+
+      // Node name to stage message mapping
+      const stageMap: Record<string, string> = {
+        "prep_analyze_patient": "환자 기록 검색 중...",
+        "prep_analyze_history": "이전 상담 패턴 파악 중...",
+        "prep_generate_questions": "예상 질문 생성 중...",
+        "prep_prepare_answers": "권장 답변 준비 중...",
+        "prep_delivery_examples": "전달 방식 예시 생성 중...",
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+
+          try {
+            const data = JSON.parse(line.slice(6));
+
+            if (data.type === "node_update") {
+              // Update progress stage based on node name
+              const stage = stageMap[data.node] || "분석 중...";
+              setPreparationStage(stage);
+              console.log(`Preparation stage: ${data.node} -> ${stage}`);
+            }
+
+            if (data.type === "complete") {
+              // Extract final answer
+              finalAnswer = data.output?.answer || "";
+              console.log("Preparation complete, answer length:", finalAnswer.length);
+            }
+          } catch (parseError) {
+            console.error("Error parsing SSE data:", parseError);
+          }
+        }
+      }
+
+      // Parse the answer into PreparationAnalysis structure
+      const analysis = parsePreparationAnalysis(finalAnswer);
+      setPreparationAnalysis(analysis);
+
+      setPreparationStage(null);
+      setIsPreparationRunning(false);
+      setPreparationComplete(true);
+
+      console.log("Preparation analysis:", analysis);
+    } catch (error) {
+      console.error("Preparation failed:", error);
+      setPreparationStage(null);
+      setIsPreparationRunning(false);
+
+      // Show error to user
+      alert(`상담 준비 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    }
+  };
+
+  // Helper function to parse LLM answer into structured PreparationAnalysis
+  const parsePreparationAnalysis = (answer: string): PreparationAnalysis => {
+    // Simple parser - looks for sections in the answer
+    const keyPoints: string[] = [];
+    const anticipatedQuestions: Array<{ question: string; answer: string; source?: string }> = [];
+    const deliveryExamples: Array<{ topic: string; bad: string; good: string }> = [];
+    const warnings: string[] = [];
+
+    // Split by common section headers
+    const sections = answer.split(/\n(?=##\s|###\s|\d+\.\s)/);
+
+    for (const section of sections) {
+      const lowerSection = section.toLowerCase();
+
+      // Extract key points
+      if (lowerSection.includes('핵심') || lowerSection.includes('포인트')) {
+        const lines = section.split('\n').filter(l => l.trim().startsWith('-') || l.trim().match(/^\d+\./));
+        keyPoints.push(...lines.map(l => l.replace(/^[-\d.]\s*/, '').trim()).filter(Boolean));
+      }
+
+      // Extract anticipated questions
+      if (lowerSection.includes('예상 질문') || lowerSection.includes('질문') && lowerSection.includes('답변')) {
+        const questionMatches = section.match(/질문[:\s]*(.+?)\n답변[:\s]*(.+?)(?=\n질문|\n\n|$)/gs);
+        if (questionMatches) {
+          for (const match of questionMatches) {
+            const [, q, a] = match.match(/질문[:\s]*(.+?)\n답변[:\s]*(.+)/s) || [];
+            if (q && a) {
+              anticipatedQuestions.push({ question: q.trim(), answer: a.trim() });
+            }
+          }
+        }
+      }
+
+      // Extract delivery examples
+      if (lowerSection.includes('전달 방식') || lowerSection.includes('예시')) {
+        const exampleMatches = section.match(/❌\s*(.+?)\n✅\s*(.+?)(?=\n❌|\n\n|$)/gs);
+        if (exampleMatches) {
+          for (const match of exampleMatches) {
+            const [, bad, good] = match.match(/❌\s*(.+?)\n✅\s*(.+)/s) || [];
+            if (bad && good) {
+              deliveryExamples.push({ topic: "전달 방식", bad: bad.trim(), good: good.trim() });
+            }
+          }
+        }
+      }
+
+      // Extract warnings
+      if (lowerSection.includes('주의') || lowerSection.includes('경고')) {
+        const lines = section.split('\n').filter(l => l.trim().startsWith('-') || l.trim().startsWith('⚠'));
+        warnings.push(...lines.map(l => l.replace(/^[-⚠]\s*/, '').trim()).filter(Boolean));
+      }
+    }
+
+    // Fallback: if parsing failed, create a simple structure
+    if (keyPoints.length === 0 && anticipatedQuestions.length === 0) {
+      return {
+        keyPoints: [
+          "환자의 대사증후군 위험인자 확인",
+          "생활습관 개선 목표 설정",
+          "운동 및 식단 계획 수립"
+        ],
+        anticipatedQuestions: [
+          {
+            question: "어떤 운동을 해야 하나요?",
+            answer: answer.substring(0, 200) + "..." // Use part of the answer
+          }
+        ],
+        deliveryExamples: [],
+        warnings: ["의학적 판단이 필요한 질문은 의사에게 에스컬레이션하세요."]
+      };
+    }
+
+    return {
+      keyPoints: keyPoints.length > 0 ? keyPoints : ["상담 준비 자료가 생성되었습니다."],
+      anticipatedQuestions,
+      deliveryExamples,
+      warnings: warnings.length > 0 ? warnings : ["환자의 개별 상황을 고려하여 조언하세요."]
+    };
   };
 
   // Consultation start handler
@@ -622,6 +797,7 @@ export default function HomePage() {
           survey={patientData?.survey}
           expanded={sidebarExpanded}
           onToggle={() => setSidebarExpanded(!sidebarExpanded)}
+          preparationAnalysis={preparationAnalysis}
         />
         {mode === "live" && citations.length > 0 && (
           <ReferencesPanel citations={citations} />

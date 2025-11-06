@@ -16,6 +16,22 @@ type Observation = {
   status?: "ok" | "warning" | "critical";
 };
 
+// Preparation analysis from backend
+interface PreparationAnalysis {
+  keyPoints: string[];
+  anticipatedQuestions: Array<{
+    question: string;
+    answer: string;
+    source?: string;
+  }>;
+  deliveryExamples: Array<{
+    topic: string;
+    bad: string;
+    good: string;
+  }>;
+  warnings: string[];
+}
+
 type PreparationSidebarProps = {
   forecastedQuestions: PreparationCard[];
   coachingObservations: Observation[];
@@ -24,6 +40,7 @@ type PreparationSidebarProps = {
   survey?: SurveyDetail | null;
   expanded?: boolean;
   onToggle?: () => void;
+  preparationAnalysis?: PreparationAnalysis | null;
 };
 
 const statusBadgeColor: Record<NonNullable<Observation["status"]>, string> = {
@@ -39,7 +56,8 @@ export function PreparationSidebar({
   exam,
   survey,
   expanded = true,
-  onToggle
+  onToggle,
+  preparationAnalysis
 }: PreparationSidebarProps) {
   const getRiskLevelColor = (level?: string) => {
     switch (level?.toLowerCase()) {
@@ -290,50 +308,112 @@ export function PreparationSidebar({
           </section>
         )}
 
-        {/* Section 3: Key Points (LLM-generated, placeholder for now) */}
+        {/* Section 3: Key Points (LLM-generated) */}
         <section style={{ marginBottom: "1.75rem" }} aria-labelledby="key-points">
           <h3 id="key-points" style={{ margin: 0, fontSize: "1rem" }}>
             핵심 포인트
           </h3>
-          <p style={{ margin: "1rem 0 0", color: "#9ca3af", fontSize: "0.9rem", fontStyle: "italic" }}>
-            상담 준비 분석 중... (Week 2에서 백엔드 LLM 통합 예정)
-          </p>
-        </section>
-
-        {/* Section 4: Anticipated questions (existing demo data) */}
-        <section style={{ marginBottom: "1.75rem" }} aria-labelledby="anticipated-questions">
-          <h3 id="anticipated-questions" style={{ margin: 0, fontSize: "1rem" }}>
-            Anticipated questions
-          </h3>
-          <ul style={{ listStyle: "none", padding: 0, margin: "1rem 0 0", display: "grid", gap: "1rem" }}>
-            {forecastedQuestions.map((card) => (
-              <li
-                key={card.title}
-                style={{
-                  border: "1px solid rgba(28, 35, 51, 0.1)",
-                  borderRadius: "0.9rem",
-                  padding: "1rem"
-                }}
-              >
-                <span
+          {preparationAnalysis && preparationAnalysis.keyPoints.length > 0 ? (
+            <ul style={{ listStyle: "none", padding: 0, margin: "1rem 0 0", display: "grid", gap: "0.75rem" }}>
+              {preparationAnalysis.keyPoints.map((point, index) => (
+                <li
+                  key={index}
                   style={{
-                    display: "inline-flex",
-                    background: "rgba(53, 97, 255, 0.12)",
-                    color: "#3541ff",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    padding: "0.25rem 0.65rem",
-                    borderRadius: "999px",
-                    marginBottom: "0.75rem"
+                    display: "flex",
+                    alignItems: "start",
+                    gap: "0.5rem",
+                    padding: "0.75rem",
+                    background: "linear-gradient(135deg, rgba(53, 97, 255, 0.05), rgba(26, 147, 111, 0.05))",
+                    borderRadius: "0.5rem",
+                    border: "1px solid rgba(53, 97, 255, 0.1)",
                   }}
                 >
-                  {card.tag}
-                </span>
-                <h4 style={{ margin: "0 0 0.5rem" }}>{card.title}</h4>
-                <p style={{ margin: 0, color: "#5b6478", fontSize: "0.9rem" }}>{card.body}</p>
-              </li>
-            ))}
-          </ul>
+                  <span style={{ color: "#3541ff", fontWeight: "bold", fontSize: "1.1rem" }}>
+                    {index + 1}.
+                  </span>
+                  <span style={{ color: "#374151", fontSize: "0.9rem", lineHeight: "1.5" }}>
+                    {point}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p style={{ margin: "1rem 0 0", color: "#9ca3af", fontSize: "0.9rem", fontStyle: "italic" }}>
+              상담 준비 버튼을 눌러 핵심 포인트를 생성하세요.
+            </p>
+          )}
+        </section>
+
+        {/* Section 4: Anticipated questions (LLM-generated or demo) */}
+        <section style={{ marginBottom: "1.75rem" }} aria-labelledby="anticipated-questions">
+          <h3 id="anticipated-questions" style={{ margin: 0, fontSize: "1rem" }}>
+            예상 질문 & 권장 답변
+          </h3>
+          {preparationAnalysis && preparationAnalysis.anticipatedQuestions.length > 0 ? (
+            <ul style={{ listStyle: "none", padding: 0, margin: "1rem 0 0", display: "grid", gap: "1rem" }}>
+              {preparationAnalysis.anticipatedQuestions.map((qa, index) => (
+                <li
+                  key={index}
+                  style={{
+                    border: "1px solid rgba(28, 35, 51, 0.1)",
+                    borderRadius: "0.9rem",
+                    padding: "1rem",
+                    background: "#fff"
+                  }}
+                >
+                  <div style={{ marginBottom: "0.75rem" }}>
+                    <strong style={{ color: "#3541ff", fontSize: "0.95rem" }}>❓ 질문:</strong>
+                    <p style={{ margin: "0.25rem 0 0", color: "#374151", fontSize: "0.9rem" }}>
+                      {qa.question}
+                    </p>
+                  </div>
+                  <div>
+                    <strong style={{ color: "#1a936f", fontSize: "0.95rem" }}>✅ 권장 답변:</strong>
+                    <p style={{ margin: "0.25rem 0 0", color: "#5b6478", fontSize: "0.9rem", lineHeight: "1.5" }}>
+                      {qa.answer}
+                    </p>
+                  </div>
+                  {qa.source && (
+                    <div style={{ marginTop: "0.5rem", paddingTop: "0.5rem", borderTop: "1px solid rgba(28, 35, 51, 0.08)" }}>
+                      <small style={{ color: "#9ca3af", fontSize: "0.75rem" }}>
+                        출처: {qa.source}
+                      </small>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ul style={{ listStyle: "none", padding: 0, margin: "1rem 0 0", display: "grid", gap: "1rem" }}>
+              {forecastedQuestions.map((card) => (
+                <li
+                  key={card.title}
+                  style={{
+                    border: "1px solid rgba(28, 35, 51, 0.1)",
+                    borderRadius: "0.9rem",
+                    padding: "1rem"
+                  }}
+                >
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      background: "rgba(53, 97, 255, 0.12)",
+                      color: "#3541ff",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      padding: "0.25rem 0.65rem",
+                      borderRadius: "999px",
+                      marginBottom: "0.75rem"
+                    }}
+                  >
+                    {card.tag}
+                  </span>
+                  <h4 style={{ margin: "0 0 0.5rem" }}>{card.title}</h4>
+                  <p style={{ margin: 0, color: "#5b6478", fontSize: "0.9rem" }}>{card.body}</p>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* Section 5: Coaching observations (existing demo data) */}
@@ -376,20 +456,88 @@ export function PreparationSidebar({
           </ul>
         </section>
 
-        {/* Section 6: Warnings (placeholder for now) */}
+        {/* Section 6: Delivery Examples (LLM-generated) */}
+        {preparationAnalysis && preparationAnalysis.deliveryExamples.length > 0 && (
+          <section style={{ marginBottom: "1.75rem" }} aria-labelledby="delivery-examples">
+            <h3 id="delivery-examples" style={{ margin: 0, fontSize: "1rem" }}>
+              전달 방식 예시
+            </h3>
+            <ul style={{ listStyle: "none", padding: 0, margin: "1rem 0 0", display: "grid", gap: "1rem" }}>
+              {preparationAnalysis.deliveryExamples.map((example, index) => (
+                <li
+                  key={index}
+                  style={{
+                    border: "1px solid rgba(28, 35, 51, 0.1)",
+                    borderRadius: "0.9rem",
+                    padding: "1rem",
+                    background: "#f9fafb"
+                  }}
+                >
+                  <div style={{ marginBottom: "0.75rem" }}>
+                    <strong style={{ color: "#374151", fontSize: "0.9rem" }}>{example.topic}</strong>
+                  </div>
+                  <div style={{ marginBottom: "0.5rem", padding: "0.5rem", background: "#fee2e2", borderLeft: "3px solid #dc2626", borderRadius: "4px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                      <span style={{ color: "#dc2626", fontWeight: "bold" }}>❌</span>
+                      <strong style={{ color: "#991b1b", fontSize: "0.85rem" }}>피해야 할 표현:</strong>
+                    </div>
+                    <p style={{ margin: 0, color: "#7f1d1d", fontSize: "0.85rem", lineHeight: "1.4" }}>
+                      {example.bad}
+                    </p>
+                  </div>
+                  <div style={{ padding: "0.5rem", background: "#d1fae5", borderLeft: "3px solid #10b981", borderRadius: "4px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                      <span style={{ color: "#10b981", fontWeight: "bold" }}>✅</span>
+                      <strong style={{ color: "#065f46", fontSize: "0.85rem" }}>권장 표현:</strong>
+                    </div>
+                    <p style={{ margin: 0, color: "#064e3b", fontSize: "0.85rem", lineHeight: "1.4" }}>
+                      {example.good}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Section 7: Warnings (LLM-generated or default) */}
         <section aria-labelledby="warnings">
           <h3 id="warnings" style={{ margin: 0, fontSize: "1rem" }}>
             주의사항
           </h3>
-          <div style={{ marginTop: "1rem", padding: "0.75rem", background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: "8px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-              <span style={{ fontSize: "1.25rem" }}>⚠️</span>
-              <strong style={{ color: "#92400e" }}>상담 시 주의</strong>
+          {preparationAnalysis && preparationAnalysis.warnings.length > 0 ? (
+            <ul style={{ listStyle: "none", padding: 0, margin: "1rem 0 0", display: "grid", gap: "0.75rem" }}>
+              {preparationAnalysis.warnings.map((warning, index) => (
+                <li
+                  key={index}
+                  style={{
+                    padding: "0.75rem",
+                    background: "#fef3c7",
+                    border: "1px solid #f59e0b",
+                    borderRadius: "8px",
+                    display: "flex",
+                    alignItems: "start",
+                    gap: "0.5rem"
+                  }}
+                >
+                  <span style={{ fontSize: "1.25rem", flexShrink: 0 }}>⚠️</span>
+                  <p style={{ margin: 0, fontSize: "0.9rem", color: "#78350f", lineHeight: "1.5" }}>
+                    {warning}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div style={{ marginTop: "1rem", padding: "0.75rem", background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                <span style={{ fontSize: "1.25rem" }}>⚠️</span>
+                <strong style={{ color: "#92400e" }}>상담 시 주의</strong>
+              </div>
+              <p style={{ margin: 0, fontSize: "0.9rem", color: "#78350f" }}>
+                의학적 판단이 필요한 질문(진단, 약물, 증상 해석)은 담당 의사와 상담하도록 안내하세요.
+              </p>
             </div>
-            <p style={{ margin: 0, fontSize: "0.9rem", color: "#78350f" }}>
-              의학적 판단이 필요한 질문(진단, 약물, 증상 해석)은 담당 의사와 상담하도록 안내하세요.
-            </p>
-          </div>
+          )}
         </section>
       </div>
     </aside>
