@@ -4,11 +4,10 @@ import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import styles from "../workspace.module.css";
-import { PatientSummary } from "../../components/patient/PatientSummary";
+import { LeftSidebar } from "../../components/navigation/LeftSidebar";
+import { RightSidebar } from "../../components/sidebar/RightSidebar";
 import { ChatWorkspace } from "../../components/chat/ChatWorkspace";
-import { PreparationSidebar } from "../../components/preparation/PreparationSidebar";
-import { ReferencesPanel, Citation } from "../../components/references/ReferencesPanel";
-import { TransparencyTimeline } from "../../components/chat/TransparencyTimeline";
+import { Citation } from "../../components/references/ReferencesPanel";
 import { TransparencyItem, useTransparencyStream } from "../../hooks/useTransparencyStream";
 import { SafetyBannerState, useSafetyEnvelope } from "../../hooks/useSafetyEnvelope";
 import { useStreamingRetrieval, AGUIMessage } from "../../hooks/useStreamingRetrieval";
@@ -92,6 +91,19 @@ const demoObservations = [
   }
 ];
 
+// Demo patients data
+const demoPatients = [
+  { patient_id: "P001", name: "김철수", risk_level: "high" as const },
+  { patient_id: "P002", name: "이영희", risk_level: "moderate" as const },
+  { patient_id: "P003", name: "박민수", risk_level: "low" as const },
+];
+
+// Demo sessions data
+const demoSessions = [
+  { session_id: "S001", created_at: "2025-01-05T10:00:00Z", message_count: 15 },
+  { session_id: "S002", created_at: "2025-01-04T14:30:00Z", message_count: 8 },
+];
+
 function formatTimestamp(value: unknown): string {
   if (value instanceof Date) {
     return value.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -107,12 +119,17 @@ function formatTimestamp(value: unknown): string {
   return "";
 }
 
-function composeAnswer(answer: string, citations?: string[]): string {
+function composeAnswer(answer: string, citations?: any[]): string {
   const trimmed = answer.trim();
   if (!citations || citations.length === 0) {
     return trimmed;
   }
-  return `${trimmed}\n\n참고: ${citations.join(", ")}`;
+  // Extract citation titles from structured citation objects
+  const citationRefs = citations.map((c) => {
+    if (typeof c === 'string') return c;  // Backward compatibility
+    return c.metadata?.chunk_id || c.title || c.id;
+  });
+  return `${trimmed}\n\n참고: ${citationRefs.join(", ")}`;
 }
 
 function createMessage(role: WorkspaceMessage["role"], content: string): WorkspaceMessage {
@@ -122,6 +139,13 @@ function createMessage(role: WorkspaceMessage["role"], content: string): Workspa
     content,
     timestamp: formatTimestamp(new Date())
   };
+}
+
+function generateSessionId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export default function WorkspacePage() {
@@ -148,8 +172,9 @@ export default function WorkspacePage() {
   // Session management state
   const [sessionId, setSessionId] = useState<string | null>(null);
 
-  // UI state for dynamic layout
-  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  // UI state for dynamic layout - updated for new sidebar system
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
+  const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false);
 
   // Citations state for References Panel
   const [citations, setCitations] = useState<Citation[]>([]);
@@ -229,14 +254,8 @@ export default function WorkspacePage() {
 
         // Update citations for References Panel
         if (streamingCitations.length > 0) {
-          const newCitations: Citation[] = streamingCitations.map((citation, idx) => ({
-            id: `citation-${Date.now()}-${idx}`,
-            title: citation,
-            content: `참고 문서: ${citation}`,
-            relevance_score: 0.85, // Default score (backend should provide this in future)
-            source: citation,
-          }));
-          setCitations(newCitations);
+          // Backend now sends structured citation objects, use them directly
+          setCitations(streamingCitations as Citation[]);
         }
       } else if (streamingError) {
         const assistantMessage = createMessage(
@@ -311,7 +330,6 @@ export default function WorkspacePage() {
     handler: async () => {
       const prompt = "이번 상담에서 강조해야 할 핵심 위험요인과 생활 습관 포인트를 3가지로 요약해줘.";
       setDraftPrompt(prompt);
-      setLastActionId("action-prep-overview");
       setMode("live");
       resetTransparency();
       await streamQuestion(prompt);
@@ -326,7 +344,6 @@ export default function WorkspacePage() {
     handler: async () => {
       const prompt = "허리둘레 감소와 야간 근무를 고려한 1주 운동 계획을 만들어줘.";
       setDraftPrompt(prompt);
-      setLastActionId("action-exercise-plan");
       setMode("live");
       resetTransparency();
       await streamQuestion(prompt);
@@ -341,7 +358,6 @@ export default function WorkspacePage() {
     handler: async () => {
       const prompt = "가슴 두근거림이 반복될 때 상담사가 안내해야 할 의사 에스컬레이션 멘트를 작성해줘.";
       setDraftPrompt(prompt);
-      setLastActionId("action-safety-check");
       setMode("live");
       resetTransparency();
       await streamQuestion(prompt);
@@ -356,7 +372,6 @@ export default function WorkspacePage() {
     handler: async () => {
       const prompt = "야간 근무 후 쉽게 준비할 수 있는 저당 단백질 간식 3가지를 추천해줘.";
       setDraftPrompt(prompt);
-      setLastActionId("action-nutrition");
       setMode("live");
       resetTransparency();
       await streamQuestion(prompt);
@@ -612,12 +627,7 @@ export default function WorkspacePage() {
     }
   }, [autoStart, patientData, isPreparationRunning, preparationComplete]);
 
-  // Auto-expand sidebar in preparation mode
-  useEffect(() => {
-    if (mode === "preparation" && !sidebarExpanded) {
-      setSidebarExpanded(true);
-    }
-  }, [mode, sidebarExpanded]);
+  // Note: Auto-expand sidebar removed - using new LeftSidebar/RightSidebar system
 
   // Keyboard shortcut: Ctrl+Space to focus input
   useEffect(() => {
@@ -666,7 +676,7 @@ export default function WorkspacePage() {
             patient_id: patientId,
             user_id: "counselor_demo",  // Hardcoded as per user requirement
             metadata: {
-              patient_name: patientData.patient.name,
+              patient_name: patientData?.patient.name || "Unknown",
               created_from: "workspace",
             },
           }),
@@ -681,6 +691,11 @@ export default function WorkspacePage() {
         console.log("Session created:", data.session_id);
       } catch (err) {
         console.error("Error creating session:", err);
+        const fallbackId = generateSessionId();
+        setSessionId(fallbackId);
+        console.warn(
+          `Falling back to local session ${fallbackId}. Configure DATABASE_URL on the backend to enable persistent sessions.`
+        );
       }
     }
 
@@ -796,82 +811,18 @@ export default function WorkspacePage() {
           ) : null}
         </div>
       </div>
-      {/* Transparency Timeline - replaces Quick Actions */}
-      {transparencyEvents.length > 0 && (
-        <section className={styles.transparencySection} aria-label="파이프라인 진행 상태">
-          <div style={{
-            maxWidth: "1400px",
-            margin: "0 auto",
-            padding: "0 1.5rem",
-          }}>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "1.5rem",
-              overflowX: "auto",
-              padding: "1rem 0",
-            }}>
-              {transparencyEvents.map((event, index) => {
-                const isActive = index === activeIndex;
-                const isCompleted = index < activeIndex;
-                const typeColor = {
-                  Thought: "#3541ff",
-                  Action: "#ff8c42",
-                  Observation: "#1a936f"
-                }[event.type];
-
-                return (
-                  <div
-                    key={`${event.type}-${index}`}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.75rem",
-                      padding: "0.75rem 1.25rem",
-                      background: isActive ? "rgba(53, 65, 255, 0.08)" : "rgba(28, 35, 51, 0.02)",
-                      border: `1px solid ${isCompleted ? typeColor : "rgba(28, 35, 51, 0.1)"}`,
-                      borderRadius: "0.5rem",
-                      minWidth: "fit-content",
-                      transition: "all 0.3s ease",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: "0.5rem",
-                        height: "0.5rem",
-                        borderRadius: "999px",
-                        background: typeColor,
-                      }}
-                    />
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <strong style={{ fontSize: "0.875rem" }}>{event.type}</strong>
-                        {isActive && (
-                          <span style={{ fontSize: "0.75rem", color: "#3541ff", fontWeight: 600 }}>
-                            진행 중
-                          </span>
-                        )}
-                        {isCompleted && (
-                          <span style={{ fontSize: "0.75rem", color: "#1a936f", fontWeight: 600 }}>
-                            완료
-                          </span>
-                        )}
-                      </div>
-                      <span style={{ fontSize: "0.8rem", color: "#5b6478" }}>{event.title}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-      )}
       <div
         className={styles.workspace}
-        data-mode={mode}
-        data-sidebar-collapsed={!sidebarExpanded}
+        data-left-collapsed={leftSidebarCollapsed}
+        data-right-collapsed={rightSidebarCollapsed}
       >
-        {patientForDisplay && <PatientSummary {...patientForDisplay} />}
+        <LeftSidebar
+          patients={demoPatients}
+          sessions={demoSessions}
+          currentPatientId={patientId || undefined}
+          collapsed={leftSidebarCollapsed}
+          onToggle={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
+        />
         <ChatWorkspace
           messages={conversation}
           mode={mode}
@@ -885,22 +836,17 @@ export default function WorkspacePage() {
           activeTransparencyIndex={activeIndex}
           currentStage={isPreparationRunning ? preparationStage : (isStreaming && transparencyEvents.length > 0 ? transparencyEvents[activeIndex]?.title : null)}
         />
-        <PreparationSidebar
-          forecastedQuestions={demoPrepCards}
-          coachingObservations={demoObservations}
+        <RightSidebar
           patient={patientData?.patient}
           exam={patientData?.latestExam}
           survey={patientData?.survey}
-          expanded={sidebarExpanded}
-          onToggle={() => setSidebarExpanded(!sidebarExpanded)}
           preparationAnalysis={preparationAnalysis}
           highlightedQuestion={lastQuestion}
+          citations={citations}
+          collapsed={rightSidebarCollapsed}
+          onToggle={() => setRightSidebarCollapsed(!rightSidebarCollapsed)}
         />
-        {mode === "live" && citations.length > 0 && (
-          <ReferencesPanel citations={citations} />
-        )}
       </div>
     </div>
   );
 }
-

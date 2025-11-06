@@ -45,7 +45,7 @@ npm run dev
 
 - **Frontend**: Next.js 16 + CopilotKit + AG-UI 프로토콜
 - **Backend**: Python FastAPI + LangGraph (Adaptive RAG)
-- **데이터베이스**: PostgreSQL (pgvector) + Neo4j (Graphiti)
+- **데이터베이스**: Chroma (Vector DB) + Neo4j (Graphiti)
 
 ---
 
@@ -63,4 +63,3 @@ npm run dev
 - 개발 가이드: [CLAUDE.md](CLAUDE.md)
 - 구현 전략: [구현전략.md](구현전략.md)
 - 구현 현황: [구현전략_준수도_분석_보고서.md](구현전략_준수도_분석_보고서.md)
-

@@ -46,9 +46,9 @@ class ChunkingConfig:
 
     chunk_size: int = 1000
     chunk_overlap: int = 200
-    min_chunk_tokens: int = 120
+    min_chunk_tokens: int = 100
     min_content_length: int = 50
-    max_merge_size: int = 2000
+    max_merge_size: int = 1000
 
 
 class SemanticChunker:
@@ -58,7 +58,9 @@ class SemanticChunker:
         self._config = config or ChunkingConfig()
 
         if MarkdownHeaderTextSplitter is None or RecursiveCharacterTextSplitter is None:
-            LOGGER.warning("LangChain text splitters not available. Install langchain-text-splitters.")
+            LOGGER.warning(
+                "LangChain text splitters not available. Install langchain-text-splitters."
+            )
             self._header_splitter = None
             self._text_splitter = None
         else:
@@ -119,24 +121,28 @@ class SemanticChunker:
             if len(split_content) > self._config.chunk_size:
                 sub_chunks = self._text_splitter.split_text(split_content)
                 for sub_chunk in sub_chunks:
-                    chunks.append(self._create_chunk(
+                    chunks.append(
+                        self._create_chunk(
+                            document_id=document_id,
+                            md_path=md_path,
+                            chunk_index=chunk_idx,
+                            text=sub_chunk,
+                            header_path=header_path,
+                            metadata=merged_metadata,
+                        )
+                    )
+                    chunk_idx += 1
+            else:
+                chunks.append(
+                    self._create_chunk(
                         document_id=document_id,
                         md_path=md_path,
                         chunk_index=chunk_idx,
-                        text=sub_chunk,
+                        text=split_content,
                         header_path=header_path,
                         metadata=merged_metadata,
-                    ))
-                    chunk_idx += 1
-            else:
-                chunks.append(self._create_chunk(
-                    document_id=document_id,
-                    md_path=md_path,
-                    chunk_index=chunk_idx,
-                    text=split_content,
-                    header_path=header_path,
-                    metadata=merged_metadata,
-                ))
+                    )
+                )
                 chunk_idx += 1
 
         # Step 6: Merge small chunks
@@ -287,10 +293,9 @@ class SemanticChunker:
             current_text = current.text.strip()
 
             # If chunk is already large enough and not header-only, keep it
-            if (
-                len(current_text) >= self._config.min_chunk_tokens
-                and not self._is_header_only_chunk(current_text)
-            ):
+            if len(
+                current_text
+            ) >= self._config.min_chunk_tokens and not self._is_header_only_chunk(current_text):
                 merged.append(current)
                 i += 1
                 continue
@@ -333,10 +338,9 @@ class SemanticChunker:
                     merged_section_path = list(next_chunk.section_path)
 
                 # Stop if we've reached minimum size
-                if (
-                    len(merged_text) >= self._config.min_chunk_tokens
-                    and not self._is_header_only_chunk(merged_text)
-                ):
+                if len(
+                    merged_text
+                ) >= self._config.min_chunk_tokens and not self._is_header_only_chunk(merged_text):
                     j += 1
                     break
 
@@ -345,15 +349,17 @@ class SemanticChunker:
             # Create merged chunk
             if merged_text.strip():
                 chunk_id = f"{document_id}:{Path(current.source_path).stem}:{len(merged):04d}"
-                merged.append(Chunk(
-                    chunk_id=chunk_id,
-                    document_id=document_id,
-                    section_path=merged_section_path,
-                    source_path=current.source_path,
-                    text=merged_text,
-                    token_count=_estimate_tokens(merged_text),
-                    metadata=merged_metadata,
-                ))
+                merged.append(
+                    Chunk(
+                        chunk_id=chunk_id,
+                        document_id=document_id,
+                        section_path=merged_section_path,
+                        source_path=current.source_path,
+                        text=merged_text,
+                        token_count=_estimate_tokens(merged_text),
+                        metadata=merged_metadata,
+                    )
+                )
 
             i = j
 

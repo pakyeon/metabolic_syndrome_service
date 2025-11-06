@@ -1,0 +1,388 @@
+.insightsTab {
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.section {
+  margin-bottom: 1.75rem;
+}
+
+.sectionTitle {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1c2333;
+}
+
+/* Patient Info Section */
+.patientInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.patientMeta {
+  margin: 0;
+  color: #5b6478;
+  font-size: 0.9rem;
+}
+
+.riskBadgeWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.riskDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+/* Survey Section */
+.surveyGrid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.surveyItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.surveyItem strong {
+  color: #374151;
+}
+
+.surveyItem span {
+  color: #5b6478;
+}
+
+/* Exam Section */
+.examWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.riskLevelCard {
+  padding: 0.75rem;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.riskLevelLabel {
+  font-size: 0.9rem;
+  color: #374151;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.riskLevelBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.riskBadge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.riskFactorsText {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.biomarkerGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+/* Key Points Section */
+.keyPointsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.keyPointItem {
+  display: flex;
+  align-items: start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, rgba(53, 97, 255, 0.05), rgba(26, 147, 111, 0.05));
+  border-radius: 0.5rem;
+  border: 1px solid rgba(53, 97, 255, 0.1);
+}
+
+.keyPointNumber {
+  color: #3541ff;
+  font-weight: bold;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.keyPointText {
+  color: #374151;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Questions Section */
+.questionsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.questionItem {
+  border: 1px solid rgba(28, 35, 51, 0.1);
+  border-radius: 0.9rem;
+  padding: 1rem;
+  background: #fff;
+  transition: all 0.3s ease;
+}
+
+.questionItem.highlighted {
+  border: 2px solid #3541ff;
+  background: rgba(53, 65, 255, 0.05);
+  box-shadow: 0 4px 12px rgba(53, 65, 255, 0.2);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+.questionBlock {
+  margin-bottom: 0.75rem;
+}
+
+.questionLabel {
+  color: #3541ff;
+  font-size: 0.95rem;
+}
+
+.questionText {
+  margin: 0.25rem 0 0;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.answerBlock {
+  margin-bottom: 0.5rem;
+}
+
+.answerLabel {
+  color: #1a936f;
+  font-size: 0.95rem;
+}
+
+.answerText {
+  margin: 0.25rem 0 0;
+  color: #5b6478;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.sourceBlock {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(28, 35, 51, 0.08);
+}
+
+.sourceText {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+/* Observations Section */
+.observationsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.observationItem {
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid rgba(28, 35, 51, 0.08);
+}
+
+.observationHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.observationDetail {
+  margin: 0;
+  color: #5b6478;
+  font-size: 0.9rem;
+}
+
+/* Delivery Examples Section */
+.deliveryList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.deliveryItem {
+  border: 1px solid rgba(28, 35, 51, 0.1);
+  border-radius: 0.9rem;
+  padding: 1rem;
+  background: #f9fafb;
+}
+
+.deliveryTopic {
+  margin-bottom: 0.75rem;
+  color: #374151;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.badExample {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  background: #fee2e2;
+  border-left: 3px solid #dc2626;
+  border-radius: 4px;
+}
+
+.goodExample {
+  padding: 0.5rem;
+  background: #d1fae5;
+  border-left: 3px solid #10b981;
+  border-radius: 4px;
+}
+
+.exampleHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.badIcon {
+  color: #dc2626;
+  font-weight: bold;
+}
+
+.goodIcon {
+  color: #10b981;
+  font-weight: bold;
+}
+
+.exampleHeader strong {
+  font-size: 0.85rem;
+}
+
+.badExample .exampleHeader strong {
+  color: #991b1b;
+}
+
+.goodExample .exampleHeader strong {
+  color: #065f46;
+}
+
+.exampleText {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.badExample .exampleText {
+  color: #7f1d1d;
+}
+
+.goodExample .exampleText {
+  color: #064e3b;
+}
+
+/* Warnings Section */
+.warningsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.warningItem {
+  padding: 0.75rem;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  display: flex;
+  align-items: start;
+  gap: 0.5rem;
+}
+
+.warningIcon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.warningText {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #78350f;
+  line-height: 1.5;
+}
+
+.defaultWarning {
+  padding: 0.75rem;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+}
+
+.warningHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.warningHeader strong {
+  color: #92400e;
+}
+
+/* Empty State */
+.emptyState {
+  margin: 0;
+  color: #9ca3af;
+  font-size: 0.9rem;
+  font-style: italic;
+}

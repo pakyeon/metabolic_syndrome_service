@@ -14,8 +14,8 @@ from langgraph.graph import END, StateGraph
 
 from ..analysis import QuestionAnalyzer, QuestionAnalysisResult, SafetyLevel
 from ..cache import FAQCache
+from ..embeddings import OpenAIEmbeddings
 from ..ingestion import Chunk, IngestionPipeline, iter_chunks
-from ..ingestion.embedding import EmbeddingConfig, EmbeddingProvider, resolve_embedding_config
 from ..providers import get_main_llm, get_small_llm
 from langchain_core.messages import HumanMessage
 from .guardrails import (
@@ -86,7 +86,7 @@ class RetrievalOutput:
 
     analysis: QuestionAnalysisResult
     answer: str
-    citations: List[str]
+    citations: List[dict]  # Changed from List[str] to List[dict] for structured citations
     observations: List[str]
     safety: SafetyEnvelope
     timings: Dict[str, float]
@@ -103,18 +103,9 @@ class RetrievalPipeline:
         chunks: Sequence[Chunk] | None = None,
     ) -> None:
         self.analyzer = analyzer or QuestionAnalyzer()
-        try:
-            self.embedding_provider = EmbeddingProvider(resolve_embedding_config())
-        except RuntimeError as exc:
-            LOGGER.warning(
-                "Embedding provider initialization failed (%s); using offline fallback.", exc
-            )
-            offline_config = EmbeddingConfig(
-                model_name=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
-                backend="offline",
-                embedding_size=int(os.getenv("EMBEDDING_DIM", "384")),
-            )
-            self.embedding_provider = EmbeddingProvider(offline_config)
+        self.embedding_client = OpenAIEmbeddings(
+            model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+        )
         self.small_llm = get_small_llm()
         self.main_llm = get_main_llm()
         self.default_vector_top_k = int(os.getenv("VECTOR_TOP_K", "3"))
@@ -157,9 +148,9 @@ class RetrievalPipeline:
                 )
             ]
 
-        vector_db_url = None
+        vector_persist_dir = None
         if os.getenv("USE_VECTOR_DB") is not None and os.getenv("DISABLE_VECTOR_DB") is None:
-            vector_db_url = os.getenv("DATABASE_URL")
+            vector_persist_dir = os.getenv("CHROMA_PERSIST_DIR")
 
         graph_url = None
         if os.getenv("USE_GRAPH_DB") is not None and os.getenv("DISABLE_GRAPH_DB") is None:
@@ -167,9 +158,9 @@ class RetrievalPipeline:
 
         self.vector_retriever = VectorRetriever(
             chunks=self._chunks,
-            embedding_provider=self.embedding_provider,
-            table_name=os.getenv("VECTOR_TABLE", "document_chunks"),
-            database_url=vector_db_url,
+            embedding_client=self.embedding_client,
+            persist_directory=vector_persist_dir,
+            collection_name=os.getenv("CHROMA_COLLECTION", "metabolic_chunks"),
         )
         self.graph_retriever = GraphRetriever(
             chunks=self._chunks,
@@ -265,7 +256,14 @@ class RetrievalPipeline:
                         reasoning="Cached FAQ response",
                     ),
                     answer=cached_answer,
-                    citations=["FAQ Cache"],
+                    citations=[{
+                        "id": "cite-faq-cache",
+                        "title": "FAQ Cache",
+                        "content": cached_answer,
+                        "relevance_score": 1.0,
+                        "source": "FAQ Cache",
+                        "metadata": {"cached": True}
+                    }],
                     observations=["FAQ cache hit - instant response"],
                     safety=SafetyEnvelope(
                         level=SafetyLevel.CLEAR, guidance="", scrubbed=cached_answer
@@ -832,8 +830,26 @@ class RetrievalPipeline:
         analysis: QuestionAnalysisResult,
         evidence: Sequence[Chunk],
         strategy: str,
-    ) -> tuple[str, List[str]]:
-        citations = [f"[{chunk.chunk_id}]" for chunk in evidence]
+    ) -> tuple[str, List[dict]]:
+        # Build citations as structured objects for frontend
+        citations = []
+        for idx, chunk in enumerate(evidence[: self.max_evidence]):
+            citation = {
+                "id": f"cite-{idx+1}",
+                "title": chunk.metadata.get("document_title", "Unknown"),
+                "content": chunk.text,
+                "relevance_score": getattr(chunk, "score", 0.8),
+                "source": chunk.source or "Unknown",
+                "page": chunk.metadata.get("page"),
+                "metadata": {
+                    "section_path": list(chunk.section_path) if chunk.section_path else [],
+                    "chunk_id": chunk.chunk_id,
+                }
+            }
+            citations.append(citation)
+
+        # For backward compatibility with answer text, create simple citation references
+        citation_refs = [f"[{chunk.chunk_id}]" for chunk in evidence]
         evidence_snippets = "\n".join(
             f"- ({idx+1}) {chunk.chunk_id}: {chunk.text}"
             for idx, chunk in enumerate(evidence[: self.max_evidence])
@@ -860,8 +876,8 @@ class RetrievalPipeline:
                     "근거 자료를 바탕으로 생활습관 개선을 권장드립니다. 하루 30분 내외의 중등도 운동을 주 5회 정도 "
                     "실천하고, 상담 시 근거 번호를 함께 안내해 주세요."
                 )
-            if citations and citations[0] not in answer:
-                answer = f"{answer} ({', '.join(citations)})"
+            if citation_refs and citation_refs[0] not in answer:
+                answer = f"{answer} ({', '.join(citation_refs)})"
             return answer, citations
 
         message = (

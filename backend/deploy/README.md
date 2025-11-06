@@ -7,7 +7,9 @@
 | `METABOLIC_ENV` | Deployment environment label (`local`, `staging`, `prod`). | `local` |
 | `METABOLIC_DATA_ROOT` | Path to document corpora. | `data` |
 | `METABOLIC_CACHE_ROOT` | Cache directory for ingestion artifacts. | `.cache/metabolic_backend` |
-| `METABOLIC_PG_HOST` / `PORT` / `USER` / `PASSWORD` / `DATABASE` | pgvector/PostgreSQL connection. | `localhost`, `5432`, `postgres`, `postgres`, `metabolic` |
+| `CHROMA_PERSIST_DIR` | Directory for persisted Chroma collection. | `.cache/metabolic_backend/vector_store/chroma_db` |
+| `CHROMA_COLLECTION` | Chroma collection name for document chunks. | `metabolic_chunks` |
+| `METABOLIC_PG_HOST` / `PORT` / `USER` / `PASSWORD` / `DATABASE` | PostgreSQL connection for transactional data. | `localhost`, `5432`, `postgres`, `postgres`, `metabolic` |
 | `METABOLIC_PG_USE_SSL` | Enable SSL for PostgreSQL. | `false` |
 | `METABOLIC_NEO4J_URI` / `USER` / `PASSWORD` | Graph database credentials. | `bolt://localhost:7687`, `neo4j`, `neo4j` |
 | `METABOLIC_EMBEDDING_MODEL` | Sentence embedding model identifier. | `sentence-transformers/all-MiniLM-L6-v2` |
@@ -27,4 +29,3 @@ Ensure ingestion artifacts exist or mount pre-generated chunks; otherwise ingest
 
 - `/metrics/latency`: JSON snapshot of recorded durations.
 - Logs emit `latency_recorded` events; forward to your logging stack for alerts.
-

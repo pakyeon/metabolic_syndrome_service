@@ -1,0 +1,70 @@
+.sidebar {
+  background: #ffffffee;
+  border-radius: 1rem;
+  box-shadow: 0 12px 24px rgba(28, 35, 51, 0.08);
+  border: 1px solid rgba(28, 35, 51, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 3rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(28, 35, 51, 0.08);
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tabButton {
+  padding: 0.5rem 1rem;
+  border: none;
+  background: transparent;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tabButton.active {
+  background: #3541ff;
+  color: white;
+}
+
+.tabButton:hover:not(.active) {
+  background: rgba(53, 65, 255, 0.1);
+}
+
+.toggleBtn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  color: #6b7280;
+  transition: color 0.2s;
+}
+
+.toggleBtn:hover {
+  color: #3541ff;
+}
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.referencesWrapper {
+  padding: 1.5rem;
+}

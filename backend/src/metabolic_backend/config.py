@@ -22,14 +22,22 @@ class Settings:
         # Connection URIs
         self.database_url: str | None = os.getenv("DATABASE_URL")
 
-        # Vector store configuration (pgvector + PostgreSQL)
+        # Vector store configuration (Chroma)
         self.pg_host: str = os.getenv("PG_HOST", "localhost")
         self.pg_port: int = int(os.getenv("PG_PORT", "5432"))
         self.pg_user: str = os.getenv("PG_USER", "postgres")
         self.pg_password: str = os.getenv("PG_PASSWORD", "postgres")
         self.pg_database: str = os.getenv("PG_DATABASE", "metabolic")
         self.pg_use_ssl: bool = os.getenv("PG_USE_SSL", "false").lower() == "true"
-        self.vector_index_threshold: int = int(os.getenv("VECTOR_INDEX_THRESHOLD", "1000"))
+        chroma_dir_env = os.getenv("CHROMA_PERSIST_DIR")
+        if chroma_dir_env:
+            chroma_path = Path(chroma_dir_env).expanduser()
+            if not chroma_path.is_absolute():
+                chroma_path = (self.cache_root / chroma_path).resolve()
+        else:
+            chroma_path = self.cache_root / "vector_store" / "chroma_db"
+        self.chroma_persist_dir: Path = chroma_path
+        self.chroma_collection: str = os.getenv("CHROMA_COLLECTION", "metabolic_chunks")
 
         # Graph store configuration (Neo4j)
         self.neo4j_uri: str = os.getenv(

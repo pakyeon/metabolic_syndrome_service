@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Metabolic Syndrome Counselor Assistant** - An adaptive RAG system that helps counselors assist patients with metabolic syndrome through evidence-based lifestyle recommendations (exercise, diet, lifestyle). The system explicitly avoids medical diagnosis, drug prescriptions, and treatment decisions.
 
 - **Frontend**: Next.js 16 + CopilotKit, implements dual-mode counseling (preparation vs. live)
-- **Backend**: Python FastAPI + LangGraph, adaptive RAG with vector (pgvector) and graph (Neo4j/Graphiti) retrieval
+- **Backend**: Python FastAPI + LangGraph, adaptive RAG with vector (Chroma) and graph (Neo4j/Graphiti) retrieval
 - **Data**: PostgreSQL (Neon) for vector embeddings, Neo4j for knowledge graphs
 
 ## Development Commands

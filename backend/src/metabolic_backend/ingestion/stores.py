@@ -1,230 +1,155 @@
-"""Persistence helpers for vector (pgvector) and Graphiti stores."""
+"""Persistence helpers for the Chroma vector store and Graphiti."""
 
 from __future__ import annotations
 
-import os
 import asyncio
-import json
 import logging
+import os
 import re
+import shutil
 from datetime import datetime, timezone
-from typing import Sequence
-
-import psycopg  # type: ignore
-
-from pgvector.psycopg import register_vector
+from pathlib import Path
+from typing import Dict, List, Sequence
 
 from graphiti_core import Graphiti  # type: ignore
 from graphiti_core.nodes import EpisodeType  # type: ignore
+
+from langchain_chroma import Chroma  # type: ignore
+
+from langchain_core.embeddings import Embeddings
 
 from .models import Chunk
 
 LOGGER = logging.getLogger(__name__)
 
 
-class VectorStoreWriter:
-    """Persist embeddings into a pgvector-backed table."""
+class _EmbeddingAdapter(Embeddings):
+    """Bridge OpenAIEmbeddings to LangChain's Embeddings protocol."""
+
+    def __init__(self, client) -> None:
+        self._client = client
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:  # type: ignore[override]
+        return self._client.embed_batch(texts)
+
+    def embed_query(self, text: str) -> List[float]:  # type: ignore[override]
+        return self._client.embed_text(text)
+
+
+class ChromaVectorStore:
+    """Persist chunk embeddings into a local Chroma collection."""
 
     def __init__(
         self,
-        dsn: str | None,
         *,
-        table: str = "document_chunks",
-        embedding_dim: int = 1536,
-        index_threshold: int = 1000,
+        persist_directory: str | Path,
+        collection_name: str,
+        embedding_client,
     ) -> None:
-        self._dsn = dsn
-        self._table = table
-        self._embedding_dim = embedding_dim
-        self._index_threshold = index_threshold
-        self._connection = None
-        self._enabled = bool(dsn and psycopg is not None)
+        if Chroma is None:  # pragma: no cover - runtime guard
+            raise RuntimeError("langchain-chroma must be installed to use the Chroma vector store.")
 
-    def __enter__(self) -> "VectorStoreWriter":
-        if not self._enabled:
-            return self
+        self._persist_directory = Path(persist_directory)
+        self._collection_name = collection_name
+        self._embedding_client = embedding_client
+        self._embedding_adapter = _EmbeddingAdapter(embedding_client)
+        self._vectorstore: Chroma | None = None
 
-        if psycopg is None:
-            LOGGER.warning("psycopg not installed; skipping vector store writes")
-            self._enabled = False
-            return self
+    # ------------------------------------------------------------------
+    def reset(self) -> None:
+        """Completely remove the persisted collection."""
 
-        try:  # pragma: no cover - relies on external database
-            self._connection = psycopg.connect(self._dsn, autocommit=True)
-            if register_vector is not None:
-                register_vector(self._connection)
-            self._ensure_schema()
-        except Exception as exc:
-            LOGGER.warning("Disabling vector store writes; connection failed (%s)", exc)
-            self._enabled = False
-            if self._connection is not None:
-                self._connection.close()
-                self._connection = None
-        return self
+        if self._persist_directory.exists():
+            shutil.rmtree(self._persist_directory)
+        self._vectorstore = None
 
-    def __exit__(self, exc_type, exc, tb) -> None:
-        if self._connection is not None:  # pragma: no branch
-            self._connection.close()
-            self._connection = None
+    # ------------------------------------------------------------------
+    def upsert_chunks(self, chunks: Sequence[Chunk], *, force_rebuild: bool = False) -> int:
+        """Upsert the provided chunks into Chroma."""
 
-    def _ensure_schema(self) -> None:
-        """Ensure schema is compatible with existing chunks table."""
-        if self._connection is None:
-            return
-
-        with self._connection.cursor() as cur:
-            try:
-                cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-            except Exception as exc:
-                LOGGER.debug("Unable to create vector extension (%s); continuing", exc)
-
-            # Check if table is 'chunks' from schema.sql or custom document_chunks
-            if self._table == "chunks":
-                # Use existing chunks table from schema.sql - no need to create
-                LOGGER.info("Using existing 'chunks' table from schema.sql")
-            else:
-                # Create custom table with explicit vector dimension
-                cur.execute(
-                    f"""
-                    CREATE TABLE IF NOT EXISTS {self._table} (
-                        chunk_id TEXT PRIMARY KEY,
-                        document_id TEXT NOT NULL,
-                        section_path JSONB NOT NULL,
-                        source_path TEXT NOT NULL,
-                        text TEXT NOT NULL,
-                        token_count INTEGER NOT NULL,
-                        embedding VECTOR({self._embedding_dim}),
-                        metadata JSONB
-                    )
-                    """
-                )
-
-    def _ensure_vector_index(self) -> None:
-        """Create vector index only if chunk count exceeds threshold."""
-        if self._connection is None:
-            return
-
-        with self._connection.cursor() as cur:
-            # Check total row count
-            cur.execute(f"SELECT COUNT(*) FROM {self._table}")
-            count_result = cur.fetchone()
-            if count_result is None:
-                return
-            total_chunks = count_result[0]
-
-            if total_chunks < self._index_threshold:
-                LOGGER.info(
-                    "Skipping vector index creation: %d chunks < %d threshold. "
-                    "Sequential scan is faster for small datasets.",
-                    total_chunks,
-                    self._index_threshold,
-                )
-                return
-
-            LOGGER.info(
-                "Creating vector index: %d chunks >= %d threshold",
-                total_chunks,
-                self._index_threshold,
-            )
-
-            # Check if index already exists
-            cur.execute(
-                f"""
-                SELECT COUNT(*) FROM pg_indexes
-                WHERE tablename = '{self._table}'
-                AND indexname IN ('{self._table}_embedding_hnsw_idx', '{self._table}_embedding_ivfflat_idx')
-                """
-            )
-            index_result = cur.fetchone()
-            if index_result and index_result[0] > 0:
-                LOGGER.info("Vector index already exists on %s.embedding", self._table)
-                return
-
-            # Create HNSW index for fast vector similarity search
-            try:
-                cur.execute(
-                    f"""
-                    CREATE INDEX IF NOT EXISTS {self._table}_embedding_hnsw_idx
-                    ON {self._table} USING hnsw (embedding vector_cosine_ops)
-                    WITH (m = 16, ef_construction = 64)
-                    """
-                )
-                LOGGER.info(
-                    "HNSW index created on %s.embedding (%d chunks)", self._table, total_chunks
-                )
-            except Exception as exc:
-                LOGGER.warning(
-                    "Failed to create HNSW index (%s); falling back to IVFFlat. "
-                    "Consider upgrading to PostgreSQL 16+ for HNSW support.",
-                    exc,
-                )
-                # Fallback to IVFFlat if HNSW is not available (older pgvector versions)
-                try:
-                    cur.execute(
-                        f"""
-                        CREATE INDEX IF NOT EXISTS {self._table}_embedding_ivfflat_idx
-                        ON {self._table} USING ivfflat (embedding vector_cosine_ops)
-                        WITH (lists = 100)
-                        """
-                    )
-                    LOGGER.info(
-                        "IVFFlat index created on %s.embedding (%d chunks)",
-                        self._table,
-                        total_chunks,
-                    )
-                except Exception as fallback_exc:
-                    LOGGER.warning(
-                        "Failed to create vector index (%s); queries will use sequential scan",
-                        fallback_exc,
-                    )
-
-    def upsert_chunks(self, chunks: Sequence[Chunk]) -> int:
-        if not self._enabled or self._connection is None:
+        if not chunks:
             return 0
 
-        inserted = 0
-        with self._connection.cursor() as cur:
-            for chunk in chunks:
-                if chunk.embedding is None:
-                    continue
-                try:
-                    cur.execute(
-                        f"""
-                        INSERT INTO {self._table} (
-                            chunk_id, document_id, section_path, source_path, text, token_count, embedding, metadata
-                        )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (chunk_id)
-                        DO UPDATE SET
-                            section_path = EXCLUDED.section_path,
-                            source_path = EXCLUDED.source_path,
-                            text = EXCLUDED.text,
-                            token_count = EXCLUDED.token_count,
-                            embedding = EXCLUDED.embedding,
-                            metadata = EXCLUDED.metadata
-                        """,
-                        (
-                            chunk.chunk_id,
-                            chunk.document_id,
-                            json.dumps(chunk.section_path, ensure_ascii=False),
-                            chunk.source_path,
-                            chunk.text,
-                            chunk.token_count,
-                            chunk.embedding,
-                            json.dumps(chunk.metadata, ensure_ascii=False),
-                        ),
-                    )
-                    inserted += cur.rowcount
-                except Exception as exc:
-                    LOGGER.warning(
-                        "Failed to upsert chunk %s into vector store (%s)", chunk.chunk_id, exc
-                    )
+        if force_rebuild:
+            LOGGER.info("Force rebuild requested; resetting Chroma collection")
+            self.reset()
 
-        # Create vector index if chunk count exceeds threshold
-        if inserted > 0:
-            self._ensure_vector_index()
+        vectorstore = self._ensure_vectorstore()
+        ids, texts, metadatas, embeddings = self._prepare_payload(chunks)
 
-        return inserted
+        vectorstore._collection.upsert(
+            ids=ids,
+            documents=texts,
+            metadatas=metadatas,
+            embeddings=embeddings,
+        )
+        vectorstore.persist()
+
+        return len(ids)
+
+    # ------------------------------------------------------------------
+    def stats(self) -> Dict[str, object]:
+        """Return lightweight stats about the persisted collection."""
+
+        vectorstore = self._ensure_vectorstore()
+        count = vectorstore._collection.count()
+
+        total_size = 0
+        if self._persist_directory.exists():
+            for path in self._persist_directory.rglob("*"):
+                if path.is_file():
+                    total_size += path.stat().st_size
+
+        return {
+            "collection": self._collection_name,
+            "persist_directory": str(self._persist_directory),
+            "documents": count,
+            "size_mb": round(total_size / (1024 * 1024), 2) if total_size else 0.0,
+        }
+
+    # ------------------------------------------------------------------
+    def load(self) -> "Chroma":
+        """Return a LangChain Chroma vector store instance."""
+
+        return self._ensure_vectorstore()
+
+    # ------------------------------------------------------------------
+    def _ensure_vectorstore(self) -> "Chroma":
+        if self._vectorstore is None:
+            self._persist_directory.mkdir(parents=True, exist_ok=True)
+            self._vectorstore = Chroma(
+                collection_name=self._collection_name,
+                embedding_function=self._embedding_adapter,
+                persist_directory=str(self._persist_directory),
+            )
+        return self._vectorstore
+
+    # ------------------------------------------------------------------
+    def _prepare_payload(self, chunks: Sequence[Chunk]):
+        ids: List[str] = []
+        texts: List[str] = []
+        metadatas: List[Dict[str, object]] = []
+        embeddings: List[List[float]] = []
+
+        for chunk in chunks:
+            ids.append(chunk.chunk_id)
+            texts.append(chunk.text)
+            metadatas.append(
+                {
+                    "chunk_id": chunk.chunk_id,
+                    "document_id": chunk.document_id,
+                    "section_path": list(chunk.section_path),
+                    "source_path": chunk.source_path,
+                    "token_count": chunk.token_count,
+                    "chunk_metadata": dict(chunk.metadata),
+                }
+            )
+
+            if chunk.embedding is None:
+                chunk.embedding = self._embedding_client.embed_text(chunk.text)
+            embeddings.append(chunk.embedding)
+
+        return ids, texts, metadatas, embeddings
 
 
 _GROUP_SANITIZE_PATTERN = re.compile(r"[^0-9A-Za-z_-]+")

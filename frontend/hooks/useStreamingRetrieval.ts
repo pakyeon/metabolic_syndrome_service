@@ -17,7 +17,7 @@ export type StreamingState = {
   isStreaming: boolean;
   messages: AGUIMessage[];
   answer: string;
-  citations: string[];
+  citations: any[];  // Changed from string[] to any[] to support structured citation objects from backend
   safety: any;
   error: string | null;
 };

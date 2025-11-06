@@ -683,16 +683,16 @@ if (data.type === 'complete' && data.output?.citations) {
 
 ## 구현 체크리스트
 
-- [ ] CSS 그리드 시스템 재설계
-- [ ] LeftSidebar 컴포넌트 생성
-- [ ] LeftSidebar CSS 작성
-- [ ] RightSidebar 컴포넌트 생성
-- [ ] RightSidebar CSS 작성
-- [ ] InsightsTab 컴포넌트 생성
-- [ ] workspace/page.tsx 레이아웃 수정
-- [ ] Citations 형식 통일 (백엔드)
-- [ ] Citations 타입 업데이트 (프론트엔드)
-- [ ] Playwright 테스트 업데이트
+- [x] CSS 그리드 시스템 재설계
+- [x] LeftSidebar 컴포넌트 생성
+- [x] LeftSidebar CSS 작성
+- [x] RightSidebar 컴포넌트 생성
+- [x] RightSidebar CSS 작성
+- [x] InsightsTab 컴포넌트 생성
+- [x] workspace/page.tsx 레이아웃 수정
+- [x] Citations 형식 통일 (백엔드)
+- [x] Citations 타입 업데이트 (프론트엔드)
+- [ ] Playwright 테스트 업데이트 (선택사항)
 
 ## 테스트 방법
 

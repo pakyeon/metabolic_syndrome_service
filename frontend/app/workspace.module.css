@@ -31,24 +31,25 @@
 
 .workspace {
   display: grid;
-  grid-template-columns: 22rem minmax(0, 1fr) 25rem;
+  grid-template-columns: 16rem minmax(0, 1fr) 28rem;
   gap: 1.5rem;
   padding: 0 2rem 2rem;
   min-height: 100vh;
 }
 
-/* Dynamic layout adjustment for live mode */
-.workspace[data-mode="live"] {
-  grid-template-columns: 22rem minmax(0, 1fr) 18rem;
+/* 왼쪽 사이드바 접힘 */
+.workspace[data-left-collapsed="true"] {
+  grid-template-columns: 3rem minmax(0, 1fr) 28rem;
 }
 
-/* Dynamic layout when sidebar is collapsed */
-.workspace[data-sidebar-collapsed="true"] {
-  grid-template-columns: 22rem minmax(0, 1fr) 0;
+/* 오른쪽 사이드바 접힘 */
+.workspace[data-right-collapsed="true"] {
+  grid-template-columns: 16rem minmax(0, 1fr) 0;
 }
 
-.workspace[data-sidebar-collapsed="true"] .prepPanel {
-  display: none;
+/* 양쪽 모두 접힘 */
+.workspace[data-left-collapsed="true"][data-right-collapsed="true"] {
+  grid-template-columns: 3rem minmax(0, 1fr) 0;
 }
 
 /* Pulse animation for highlighted questions */
@@ -69,6 +70,68 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* 왼쪽 사이드바 */
+.leftSidebar {
+  background: #ffffffee;
+  border-radius: 1rem;
+  box-shadow: 0 12px 24px rgba(28, 35, 51, 0.08);
+  border: 1px solid rgba(28, 35, 51, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 1.5rem;
+  max-height: calc(100vh - 3rem);
+  align-self: flex-start;
+  transition: width 0.3s ease;
+}
+
+.leftSidebar.collapsed {
+  width: 3rem;
+}
+
+/* 오른쪽 사이드바 탭 구조 */
+.rightSidebar {
+  background: #ffffffee;
+  border-radius: 1rem;
+  box-shadow: 0 12px 24px rgba(28, 35, 51, 0.08);
+  border: 1px solid rgba(28, 35, 51, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 1.5rem;
+  max-height: calc(100vh - 3rem);
+  align-self: flex-start;
+}
+
+.rightSidebarTabs {
+  display: flex;
+  border-bottom: 1px solid rgba(28, 35, 51, 0.08);
+  padding: 0.5rem 1rem;
+  gap: 0.5rem;
+}
+
+.tabButton {
+  padding: 0.5rem 1rem;
+  border: none;
+  background: transparent;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tabButton.active {
+  background: #3541ff;
+  color: white;
+}
+
+.tabButton:hover:not(.active) {
+  background: rgba(53, 65, 255, 0.1);
 }
 
 /* Sticky positioning for sidebar panels */

@@ -10,12 +10,21 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  const publicApiKey = process.env.NEXT_PUBLIC_COPILOTKIT_API_KEY ?? "";
+  const publicApiKey = process.env.NEXT_PUBLIC_COPILOTKIT_API_KEY?.trim();
+  const runtimeUrl =
+    process.env.NEXT_PUBLIC_COPILOTKIT_RUNTIME_URL?.trim() ||
+    process.env.NEXT_PUBLIC_BACKEND_URL?.trim() ||
+    "http://localhost:8000";
+
+  const copilotProps = {
+    runtimeUrl,
+    ...(publicApiKey ? { publicApiKey } : {})
+  };
 
   return (
     <html lang="en">
       <body>
-        <CopilotKit publicApiKey={publicApiKey}>{children}</CopilotKit>
+        <CopilotKit {...copilotProps}>{children}</CopilotKit>
       </body>
     </html>
   );

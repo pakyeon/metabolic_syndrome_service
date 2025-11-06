@@ -33,9 +33,10 @@ if "psycopg2" not in sys.modules:
     sys.modules["psycopg2"] = psycopg2_stub
     sys.modules["psycopg2.extras"] = extras_stub
 
+from langchain_core.messages import AIMessage
+
 from metabolic_backend.api import create_app
 from metabolic_backend.ingestion.models import Chunk
-from metabolic_backend.providers.llm import LLMResponse
 
 
 class RetrievalPipelineIntegrationTest(unittest.TestCase):
@@ -81,12 +82,22 @@ class RetrievalPipelineIntegrationTest(unittest.TestCase):
             metadata={"retrieval": "graph_db"},
         )
 
+        class _StubEmbeddingClient:
+            def __init__(self) -> None:
+                self._vector = [0.1, 0.2, 0.3]
+
+            def embed_text(self, text: str):  # noqa: ANN001 - signature parity
+                return list(self._vector)
+
+            def embed_batch(self, texts):  # noqa: ANN001 - signature parity
+                return [list(self._vector) for _ in texts]
+
         class _StubLLM:
             def __init__(self, reply: str) -> None:
                 self._reply = reply
 
-            def complete(self, prompt: str) -> LLMResponse:
-                return LLMResponse(text=self._reply, model="stub-llm", cached=True)
+            def invoke(self, messages):  # noqa: ANN001 - LangChain parity
+                return AIMessage(content=self._reply)
 
         cls.small_llm = _StubLLM(
             "하위 질문 1: 걷기 운동 권장 시간은?\n하위 질문 2: 걷기 운동과 혈당의 관계는?"
@@ -137,6 +148,14 @@ class RetrievalPipelineIntegrationTest(unittest.TestCase):
                 mock.patch(
                     "metabolic_backend.orchestrator.pipeline.get_main_llm",
                     return_value=cls.main_llm,
+                ),
+                mock.patch(
+                    "metabolic_backend.orchestrator.pipeline.OpenAIEmbeddings",
+                    new=lambda *args, **kwargs: _StubEmbeddingClient(),
+                ),
+                mock.patch(
+                    "metabolic_backend.retrievers.vector.OpenAIEmbeddings",
+                    new=lambda *args, **kwargs: _StubEmbeddingClient(),
                 ),
             ]
         )

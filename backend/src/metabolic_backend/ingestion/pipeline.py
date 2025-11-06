@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Iterable, Iterator, List
 
 from ..config import get_settings
+from ..embeddings import OpenAIEmbeddings
 from .chunking import ChunkingConfig, SemanticChunker
-from .embedding import EmbeddingProvider, resolve_embedding_config
 from .models import Chunk
-from .stores import GraphitiWriter, VectorStoreWriter
+from .stores import ChromaVectorStore, GraphitiWriter
 
 LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class IngestionPipeline:
         output_root: Path | None = None,
         *,
         chunk_config: ChunkingConfig | None = None,
-        embedding_provider: EmbeddingProvider | None = None,
+        embedding_client: OpenAIEmbeddings | None = None,
     ) -> None:
         settings = get_settings()
         self.data_root = data_root or settings.data_root
@@ -47,13 +47,21 @@ class IngestionPipeline:
         self.output_root.mkdir(parents=True, exist_ok=True)
 
         self.chunker = SemanticChunker(chunk_config)
-        self.embedding_provider = embedding_provider or EmbeddingProvider(
-            resolve_embedding_config()
+        self.embedding_client = embedding_client or OpenAIEmbeddings(
+            model=settings.embedding_model
         )
 
-        self.database_url = os.getenv("DATABASE_URL")
-        self.vector_table = os.getenv("VECTOR_TABLE", "document_chunks")
-        self.vector_index_threshold = settings.vector_index_threshold
+        default_persist = settings.chroma_persist_dir
+        persist_override = os.getenv("CHROMA_PERSIST_DIR")
+        if persist_override:
+            persist_path = Path(persist_override).expanduser()
+            if not persist_path.is_absolute():
+                persist_path = (self.output_root / persist_path).resolve()
+        else:
+            persist_path = default_persist
+        self.chroma_persist_directory = persist_path
+        self.chroma_collection = os.getenv("CHROMA_COLLECTION", "metabolic_chunks")
+        self.force_vector_rebuild = os.getenv("VECTOR_FORCE_REBUILD") is not None
         self.neo4j_uri = os.getenv("NEO4J_URI", settings.neo4j_uri)
         self.neo4j_user = os.getenv("NEO4J_USER", settings.neo4j_user)
         self.neo4j_password = os.getenv("NEO4J_PASSWORD", settings.neo4j_password)
@@ -86,7 +94,7 @@ class IngestionPipeline:
             return IngestionResult(0, 0, self.output_root / "chunks.jsonl", 0, 0)
 
         LOGGER.info("Generating embeddings for %s chunks", len(chunks))
-        embeddings = self.embedding_provider.embed([chunk.text for chunk in chunks])
+        embeddings = self.embedding_client.embed_batch([chunk.text for chunk in chunks])
         for chunk, embedding in zip(chunks, embeddings):
             chunk.embedding = embedding
 
@@ -96,18 +104,25 @@ class IngestionPipeline:
                 fout.write(json.dumps(chunk.as_record(), ensure_ascii=False) + "\n")
 
         vector_records = 0
-        if self.use_vector_store and self.database_url:
-            embedding_dim = self.embedding_provider._config.embedding_size
-            with VectorStoreWriter(
-                self.database_url,
-                table=self.vector_table,
-                embedding_dim=embedding_dim,
-                index_threshold=self.vector_index_threshold,
-            ) as writer:
-                vector_records = writer.upsert_chunks(chunks)
-                LOGGER.info(
-                    "Persisted %s records to pgvector table %s", vector_records, self.vector_table
+        if self.use_vector_store:
+            try:
+                chroma_store = ChromaVectorStore(
+                    persist_directory=self.chroma_persist_directory,
+                    collection_name=self.chroma_collection,
+                    embedding_client=self.embedding_client,
                 )
+                vector_records = chroma_store.upsert_chunks(
+                    chunks, force_rebuild=self.force_vector_rebuild
+                )
+                stats = chroma_store.stats()
+                LOGGER.info(
+                    "Persisted %s records to Chroma collection %s (total: %s)",
+                    vector_records,
+                    self.chroma_collection,
+                    stats.get("documents"),
+                )
+            except Exception as exc:
+                LOGGER.warning("Chroma persistence failed; skipping vector store update (%s)", exc)
         else:
             LOGGER.info("Vector store persistence disabled or not configured")
 
