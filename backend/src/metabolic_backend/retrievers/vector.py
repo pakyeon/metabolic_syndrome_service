@@ -9,18 +9,10 @@ import math
 from dataclasses import replace
 from typing import List, Sequence
 
-try:
-    import psycopg  # type: ignore
-    from psycopg.rows import dict_row  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
-    psycopg = None  # type: ignore[assignment]
-    dict_row = None  # type: ignore[assignment]
+import psycopg
+from psycopg.rows import dict_row
 
-try:
-    from pgvector.psycopg import register_vector  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
-    register_vector = None  # type: ignore[assignment]
-
+from pgvector.psycopg import register_vector
 from ..config import get_settings
 from ..ingestion import Chunk, iter_chunks
 from ..ingestion.embedding import EmbeddingProvider, resolve_embedding_config
@@ -41,7 +33,9 @@ class VectorRetriever:
     ) -> None:
         self._settings = get_settings()
         self._chunks = list(chunks) if chunks is not None else list(iter_chunks())
-        self._embedding_provider = embedding_provider or EmbeddingProvider(resolve_embedding_config())
+        self._embedding_provider = embedding_provider or EmbeddingProvider(
+            resolve_embedding_config()
+        )
         self._table = table_name or "document_chunks"
         self._database_url = database_url
         self._local_vectors: List[tuple[Chunk, List[float]]] | None = None
@@ -89,7 +83,7 @@ class VectorRetriever:
         if dict_row is None:  # pragma: no cover - psycopg optional
             return []
 
-        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:  # type: ignore[attr-defined]
+        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
             if register_vector is not None:
                 register_vector(conn)
 

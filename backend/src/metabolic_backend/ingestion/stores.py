@@ -68,6 +68,7 @@ class VectorStoreWriter:
             self._connection = None
 
     def _ensure_schema(self) -> None:
+        """Ensure schema is compatible with existing chunks table."""
         if self._connection is None:
             return
 
@@ -77,21 +78,26 @@ class VectorStoreWriter:
             except Exception as exc:
                 LOGGER.debug("Unable to create vector extension (%s); continuing", exc)
 
-            # Create table with explicit vector dimension
-            cur.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {self._table} (
-                    chunk_id TEXT PRIMARY KEY,
-                    document_id TEXT NOT NULL,
-                    section_path JSONB NOT NULL,
-                    source_path TEXT NOT NULL,
-                    text TEXT NOT NULL,
-                    token_count INTEGER NOT NULL,
-                    embedding VECTOR({self._embedding_dim}),
-                    metadata JSONB
+            # Check if table is 'chunks' from schema.sql or custom document_chunks
+            if self._table == "chunks":
+                # Use existing chunks table from schema.sql - no need to create
+                LOGGER.info("Using existing 'chunks' table from schema.sql")
+            else:
+                # Create custom table with explicit vector dimension
+                cur.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {self._table} (
+                        chunk_id TEXT PRIMARY KEY,
+                        document_id TEXT NOT NULL,
+                        section_path JSONB NOT NULL,
+                        source_path TEXT NOT NULL,
+                        text TEXT NOT NULL,
+                        token_count INTEGER NOT NULL,
+                        embedding VECTOR({self._embedding_dim}),
+                        metadata JSONB
+                    )
+                    """
                 )
-                """
-            )
 
     def _ensure_vector_index(self) -> None:
         """Create vector index only if chunk count exceeds threshold."""

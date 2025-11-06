@@ -383,6 +383,32 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain-openai"
+version = "1.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "langchain-core" },
+    { name = "openai" },
+    { name = "tiktoken" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b3/3c/edb7ffca76fdcfd938ce8380bf8ec79a0a8be41ba7fdbf6f9fe1cb5fd1a8/langchain_openai-1.0.2.tar.gz", hash = "sha256:621e8295c52db9a1fc74806a0bd227ea215c132c6c5e421d2982c9ee78468769", size = 1025578, upload-time = "2025-11-03T14:08:32.121Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/78/9b/7af1d539a051d195c5ecc5990ebd483f208c40f75a8a9532846d16762704/langchain_openai-1.0.2-py3-none-any.whl", hash = "sha256:b3eb9b82752063b46452aa868d8c8bc1604e57631648c3bc325bba58d3aeb143", size = 81934, upload-time = "2025-11-03T14:08:30.655Z" },
+]
+
+[[package]]
+name = "langchain-text-splitters"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "langchain-core" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fa/2e/c833dcc379c1c086453708ef5eef7d4d1f808559ca4458bd6569d5d83ad7/langchain_text_splitters-1.0.0.tar.gz", hash = "sha256:d8580a20ad7ed10b432feb273e5758b2cc0902d094919629cec0e1ad691a6744", size = 264257, upload-time = "2025-10-17T14:33:41.743Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1e/97/d362353ab04f865af6f81d4d46e7aa428734aa032de0017934b771fc34b7/langchain_text_splitters-1.0.0-py3-none-any.whl", hash = "sha256:f00c8219d3468f2c5bd951b708b6a7dd9bc3c62d0cfb83124c377f7170f33b2e", size = 33851, upload-time = "2025-10-17T14:33:40.46Z" },
+]
+
+[[package]]
 name = "langgraph"
 version = "1.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -485,6 +511,8 @@ dependencies = [
     { name = "graphiti-core" },
     { name = "httpx" },
     { name = "langchain" },
+    { name = "langchain-openai" },
+    { name = "langchain-text-splitters" },
     { name = "langgraph" },
     { name = "neo4j" },
     { name = "nest-asyncio" },
@@ -509,6 +537,8 @@ requires-dist = [
     { name = "graphiti-core", specifier = ">=0.22.0,<0.23.0" },
     { name = "httpx", specifier = ">=0.28.1,<0.29.0" },
     { name = "langchain", specifier = ">=1.0.3,<1.1.0" },
+    { name = "langchain-openai", specifier = ">=1.0.2" },
+    { name = "langchain-text-splitters", specifier = ">=1.0.0" },
     { name = "langgraph", specifier = ">=1.0.2,<1.1.0" },
     { name = "neo4j", specifier = ">=6.0.2,<6.1.0" },
     { name = "nest-asyncio", specifier = ">=1.6.0,<1.7.0" },

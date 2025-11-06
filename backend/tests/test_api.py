@@ -1,10 +1,10 @@
 import os
 import unittest
 
-os.environ["METABOLIC_DISABLE_INGESTION"] = "1"
-os.environ.setdefault("METABOLIC_DISABLE_VECTOR_DB", "1")
-os.environ.setdefault("METABOLIC_DISABLE_GRAPH_DB", "1")
-os.environ.setdefault("METABOLIC_EMBEDDING_BACKEND", "offline")
+os.environ["DISABLE_INGESTION"] = "1"
+os.environ.setdefault("DISABLE_VECTOR_DB", "1")
+os.environ.setdefault("DISABLE_GRAPH_DB", "1")
+os.environ.setdefault("EMBEDDING_BACKEND", "offline")
 
 from fastapi.testclient import TestClient
 

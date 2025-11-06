@@ -17,6 +17,7 @@ from ..cache import FAQCache
 from ..ingestion import Chunk, IngestionPipeline, iter_chunks
 from ..ingestion.embedding import EmbeddingConfig, EmbeddingProvider, resolve_embedding_config
 from ..providers import get_main_llm, get_small_llm
+from langchain_core.messages import HumanMessage
 from .guardrails import (
     SafetyEnvelope,
     append_caution_guidance,
@@ -32,6 +33,7 @@ LOGGER = logging.getLogger(__name__)
 @dataclass(slots=True)
 class PatientStateAnalysis:
     """Step 1: Patient state analysis."""
+
     summary: str  # "55세 남성, BMI 28.5(과체중)..."
     key_metrics: Dict[str, str]  # {"BMI": "28.5", "혈압": "140/90"...}
     concerns: List[str]  # ["혈압 경계", "체중 관리 필요"]
@@ -40,6 +42,7 @@ class PatientStateAnalysis:
 @dataclass(slots=True)
 class ConsultationPattern:
     """Step 2: Previous consultation pattern."""
+
     previous_topics: List[str]  # ["걷기 운동", "식단 조절"]
     adherence_notes: List[str]  # ["운동 실천율 50%"]
     difficulties: List[str]  # ["시간 부족으로 운동 어려움"]
@@ -48,6 +51,7 @@ class ConsultationPattern:
 @dataclass(slots=True)
 class ExpectedQuestion:
     """Step 3: Expected question with recommended answer."""
+
     question: str
     recommended_answer: str
     evidence_chunks: List[Chunk]
@@ -57,6 +61,7 @@ class ExpectedQuestion:
 @dataclass(slots=True)
 class DeliveryExample:
     """Step 5: Delivery method example."""
+
     topic: str
     technical_version: str  # Medical terminology
     patient_friendly_version: str  # Simple language
@@ -66,6 +71,7 @@ class DeliveryExample:
 @dataclass(slots=True)
 class PreparationAnalysis:
     """Complete 5-step preparation analysis."""
+
     patient_state: PatientStateAnalysis
     consultation_pattern: ConsultationPattern | None  # May not exist
     expected_questions: List[ExpectedQuestion]
@@ -100,21 +106,23 @@ class RetrievalPipeline:
         try:
             self.embedding_provider = EmbeddingProvider(resolve_embedding_config())
         except RuntimeError as exc:
-            LOGGER.warning("Embedding provider initialization failed (%s); using offline fallback.", exc)
+            LOGGER.warning(
+                "Embedding provider initialization failed (%s); using offline fallback.", exc
+            )
             offline_config = EmbeddingConfig(
                 model_name=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
                 backend="offline",
-                embedding_size=int(os.getenv("METABOLIC_EMBEDDING_DIM", "384")),
+                embedding_size=int(os.getenv("EMBEDDING_DIM", "384")),
             )
             self.embedding_provider = EmbeddingProvider(offline_config)
         self.small_llm = get_small_llm()
         self.main_llm = get_main_llm()
-        self.default_vector_top_k = int(os.getenv("METABOLIC_VECTOR_TOP_K", "3"))
-        self.graph_top_k = int(os.getenv("METABOLIC_GRAPH_TOP_K", "5"))
-        self.max_evidence = int(os.getenv("METABOLIC_EVIDENCE_LIMIT", "5"))
+        self.default_vector_top_k = int(os.getenv("VECTOR_TOP_K", "3"))
+        self.graph_top_k = int(os.getenv("GRAPH_TOP_K", "5"))
+        self.max_evidence = int(os.getenv("EVIDENCE_LIMIT", "5"))
 
         # Initialize FAQ cache
-        cache_dir = Path(os.getenv("METABOLIC_CACHE_DIR", ".cache/metabolic_backend"))
+        cache_dir = Path(os.getenv("CACHE_DIR", ".cache/backend"))
         cache_file = cache_dir / "faq_cache.json"
         self.faq_cache = FAQCache(cache_file)
 
@@ -124,13 +132,15 @@ class RetrievalPipeline:
             LOGGER.info("Initialized FAQ cache with default entries")
 
         self._chunks = list(chunks) if chunks is not None else list(iter_chunks())
-        disable_ingestion = os.getenv("METABOLIC_DISABLE_INGESTION") is not None
+        disable_ingestion = os.getenv("DISABLE_INGESTION") is not None
         if not self._chunks and not disable_ingestion:
             LOGGER.info("Chunk cache empty; running ingestion pipeline on-demand")
             try:
                 IngestionPipeline().run()
             except FileNotFoundError:
-                LOGGER.warning("No documents available for ingestion. Retrieval will return fallback evidence.")
+                LOGGER.warning(
+                    "No documents available for ingestion. Retrieval will return fallback evidence."
+                )
             self._chunks = list(iter_chunks())
 
         if not self._chunks:
@@ -148,17 +158,17 @@ class RetrievalPipeline:
             ]
 
         vector_db_url = None
-        if os.getenv("METABOLIC_USE_VECTOR_DB") is not None and os.getenv("METABOLIC_DISABLE_VECTOR_DB") is None:
+        if os.getenv("USE_VECTOR_DB") is not None and os.getenv("DISABLE_VECTOR_DB") is None:
             vector_db_url = os.getenv("DATABASE_URL")
 
         graph_url = None
-        if os.getenv("METABOLIC_USE_GRAPH_DB") is not None and os.getenv("METABOLIC_DISABLE_GRAPH_DB") is None:
-            graph_url = os.getenv("NEO4J_URL") or os.getenv("METABOLIC_NEO4J_URI")
+        if os.getenv("USE_GRAPH_DB") is not None and os.getenv("DISABLE_GRAPH_DB") is None:
+            graph_url = os.getenv("NEO4J_URL") or os.getenv("NEO4J_URI")
 
         self.vector_retriever = VectorRetriever(
             chunks=self._chunks,
             embedding_provider=self.embedding_provider,
-            table_name=os.getenv("METABOLIC_VECTOR_TABLE", "document_chunks"),
+            table_name=os.getenv("VECTOR_TABLE", "document_chunks"),
             database_url=vector_db_url,
         )
         self.graph_retriever = GraphRetriever(
@@ -231,7 +241,9 @@ class RetrievalPipeline:
         return graph.compile()
 
     # ------------------------------------------------------------------
-    def run(self, question: str, *, context: str | None = None, mode: str = "live") -> RetrievalOutput:
+    def run(
+        self, question: str, *, context: str | None = None, mode: str = "live"
+    ) -> RetrievalOutput:
         start_total = time.perf_counter()
 
         # Check FAQ cache for live mode (skip for preparation mode)
@@ -239,7 +251,9 @@ class RetrievalPipeline:
             cached_answer = self.faq_cache.get(question, similarity_threshold=0.85)
             if cached_answer:
                 cache_duration = time.perf_counter() - start_total
-                LOGGER.info(f"FAQ cache hit for: {question[:50]}... (took {cache_duration*1000:.1f}ms)")
+                LOGGER.info(
+                    f"FAQ cache hit for: {question[:50]}... (took {cache_duration*1000:.1f}ms)"
+                )
 
                 # Return cached result with minimal processing
                 return RetrievalOutput(
@@ -253,7 +267,9 @@ class RetrievalPipeline:
                     answer=cached_answer,
                     citations=["FAQ Cache"],
                     observations=["FAQ cache hit - instant response"],
-                    safety=SafetyEnvelope(level=SafetyLevel.CLEAR, guidance="", scrubbed=cached_answer),
+                    safety=SafetyEnvelope(
+                        level=SafetyLevel.CLEAR, guidance="", scrubbed=cached_answer
+                    ),
                     timings={"total": cache_duration, "cache_lookup": cache_duration},
                     evidence=[],
                 )
@@ -569,6 +585,7 @@ class RetrievalPipeline:
             # Event loop already running - use nest_asyncio
             try:
                 import nest_asyncio
+
                 nest_asyncio.apply()
                 evidence = asyncio.run(_retrieve_parallel())
             except Exception as exc:
@@ -617,7 +634,9 @@ class RetrievalPipeline:
         connectors = {"그리고", "및", "또", "동시에", "고 ", " 고 ", "며", " 와 ", " 과 "}
         relationship_keywords = {"관계", "영향", "연관", "비교", "차이", "상관", "함께", "동시에"}
         contains_connector = any(connector in question_trimmed for connector in connectors)
-        contains_relationship = any(keyword in question_trimmed for keyword in relationship_keywords)
+        contains_relationship = any(
+            keyword in question_trimmed for keyword in relationship_keywords
+        )
         multiple_questions = question_trimmed.count("?") >= 2
 
         # Mode-specific top-k values
@@ -654,8 +673,11 @@ class RetrievalPipeline:
             "- 운동/식단/생활습관과 관련된 핵심 키워드를 유지하세요.\n"
             f"질문: {question}\n하위 질문 목록 (번호 없이 한 줄에 하나 씩):"
         )
-        response = self.small_llm.complete(prompt)
-        text = response.text.strip()
+        if self.small_llm:
+            response = self.small_llm.invoke([HumanMessage(content=prompt)])
+            text = response.content.strip()
+        else:
+            text = question  # Fallback
         candidates: List[str] = []
         for line in text.splitlines():
             normalized = line.strip("-• ").strip()
@@ -692,7 +714,9 @@ class RetrievalPipeline:
             "동시에",
         }
         connectors = {"그리고", "및", "또", "동시에", "하지만"}
-        if any(keyword in text for keyword in relationship_keywords) or any(connector in text for connector in connectors):
+        if any(keyword in text for keyword in relationship_keywords) or any(
+            connector in text for connector in connectors
+        ):
             return "graph"
         if "네트워크" in text or "연결" in text:
             return "graph"
@@ -779,7 +803,9 @@ class RetrievalPipeline:
         return base
 
     # ------------------------------------------------------------------
-    def _rewrite_question(self, question: str, analysis: QuestionAnalysisResult, *, strategy: str) -> str:
+    def _rewrite_question(
+        self, question: str, analysis: QuestionAnalysisResult, *, strategy: str
+    ) -> str:
         normalized = question.strip()
         if strategy == "vector":
             return normalized
@@ -791,8 +817,11 @@ class RetrievalPipeline:
             "\n질문: "
             f"{normalized}\n정제된 질문:"
         )
-        response = self.small_llm.complete(prompt)
-        rewritten = response.text.strip()
+        if self.small_llm:
+            response = self.small_llm.invoke([HumanMessage(content=prompt)])
+            rewritten = response.content.strip()
+        else:
+            rewritten = normalized  # Fallback
         if not rewritten or "정제된 질문" in rewritten or "검색에 유리" in rewritten:
             rewritten = normalized
         return rewritten
@@ -821,8 +850,11 @@ class RetrievalPipeline:
                 f"\n질문 전략: {strategy}"
                 f"\n근거:\n{evidence_snippets}\n답변:"
             )
-            response = self.main_llm.complete(prompt)
-            answer = response.text.strip()
+            if self.main_llm:
+                response = self.main_llm.invoke([HumanMessage(content=prompt)])
+                answer = response.content.strip()
+            else:
+                answer = "LLM이 초기화되지 않아 답변을 생성할 수 없습니다."
             if not answer:
                 answer = (
                     "근거 자료를 바탕으로 생활습관 개선을 권장드립니다. 하루 30분 내외의 중등도 운동을 주 5회 정도 "
@@ -848,7 +880,9 @@ class RetrievalPipeline:
         return observations
 
     @staticmethod
-    def _append_ag_message(state: dict, *, role: str, title: str, content: str) -> List[Dict[str, str]]:
+    def _append_ag_message(
+        state: dict, *, role: str, title: str, content: str
+    ) -> List[Dict[str, str]]:
         """Append structured AG-UI protocol message."""
         observations = list(state.get("observations", []))
         ag_message = {
@@ -939,8 +973,11 @@ class RetrievalPipeline:
             "요약:"
         )
 
-        response = self.main_llm.complete(prompt)
-        summary = response.text.strip()
+        if self.main_llm:
+            response = self.main_llm.invoke([HumanMessage(content=prompt)])
+            summary = response.content.strip()
+        else:
+            summary = "환자 정보를 확인하세요."  # Fallback
 
         patient_state = PatientStateAnalysis(
             summary=summary,
@@ -958,10 +995,12 @@ class RetrievalPipeline:
 
         self._update_timings(state, "prep_patient_analysis", duration)
         base = self._base_state(state)
-        base.update({
-            "patient_state": patient_state,
-            "observations": observations,
-        })
+        base.update(
+            {
+                "patient_state": patient_state,
+                "observations": observations,
+            }
+        )
         return base
 
     def _node_prep_analyze_history(self, state: dict) -> dict:
@@ -979,8 +1018,11 @@ class RetrievalPipeline:
             "분석:"
         )
 
-        response = self.main_llm.complete(prompt)
-        analysis_text = response.text.strip()
+        if self.main_llm:
+            response = self.main_llm.invoke([HumanMessage(content=prompt)])
+            analysis_text = response.content.strip()
+        else:
+            analysis_text = "없음"  # Fallback
 
         if "없음" in analysis_text or not analysis_text:
             pattern = None
@@ -1001,10 +1043,12 @@ class RetrievalPipeline:
 
         self._update_timings(state, "prep_history_analysis", duration)
         base = self._base_state(state)
-        base.update({
-            "consultation_pattern": pattern,
-            "observations": observations,
-        })
+        base.update(
+            {
+                "consultation_pattern": pattern,
+                "observations": observations,
+            }
+        )
         return base
 
     def _node_prep_generate_questions(self, state: dict) -> dict:
@@ -1027,8 +1071,11 @@ class RetrievalPipeline:
             "예상 질문 목록 (번호 없이 한 줄에 하나씩):"
         )
 
-        response = self.small_llm.complete(prompt)
-        questions_text = response.text.strip()
+        if self.small_llm:
+            response = self.small_llm.invoke([HumanMessage(content=prompt)])
+            questions_text = response.content.strip()
+        else:
+            questions_text = ""  # Fallback
 
         expected_questions_text = []
         for line in questions_text.splitlines():
@@ -1048,10 +1095,12 @@ class RetrievalPipeline:
 
         self._update_timings(state, "prep_question_generation", duration)
         base = self._base_state(state)
-        base.update({
-            "expected_questions_text": expected_questions_text,
-            "observations": observations,
-        })
+        base.update(
+            {
+                "expected_questions_text": expected_questions_text,
+                "observations": observations,
+            }
+        )
         return base
 
     def _node_prep_prepare_answers(self, state: dict) -> dict:
@@ -1073,6 +1122,7 @@ class RetrievalPipeline:
         except RuntimeError:
             try:
                 import nest_asyncio
+
                 nest_asyncio.apply()
                 expected_questions = asyncio.run(_prepare_answers_parallel())
             except Exception as exc:
@@ -1091,10 +1141,12 @@ class RetrievalPipeline:
 
         self._update_timings(state, "prep_answer_preparation", duration)
         base = self._base_state(state)
-        base.update({
-            "expected_questions": expected_questions,
-            "observations": observations,
-        })
+        base.update(
+            {
+                "expected_questions": expected_questions,
+                "observations": observations,
+            }
+        )
         return base
 
     async def _prepare_single_answer(self, question: str) -> ExpectedQuestion:
@@ -1111,13 +1163,41 @@ class RetrievalPipeline:
             chunks.sort(key=lambda c: getattr(c, "score", 0.0) or 0.0, reverse=True)
             chunks = chunks[:5]
 
-        # Simple synthesis
-        answer = "권장 답변이 준비되었습니다."
+        # Generate actual answer using LLM
+        evidence_snippets = "\n".join(
+            f"- ({idx+1}) {chunk.chunk_id}: {chunk.text[:200]}"
+            for idx, chunk in enumerate(chunks[:3])
+        )
+        
+        prompt = (
+            "예상 질문에 대한 권장 답변을 작성하세요.\n"
+            "- 2-3문장으로 간결하게 답변\n"
+            "- 구체적인 행동 권장 포함 (예: 하루 30분, 주 5회)\n"
+            "- 제안의 톤 유지 ('~를 권장드립니다', '~하시면 좋습니다')\n"
+            "- 의학적 판단은 피하고 일반적인 가이드라인만 제공\n\n"
+            f"예상 질문: {question}\n\n"
+            f"근거:\n{evidence_snippets}\n\n"
+            "권장 답변:"
+        )
+
+        if self.small_llm:
+            response = self.small_llm.invoke([HumanMessage(content=prompt)])
+            answer = response.content.strip()
+        else:
+            answer = "근거 자료를 바탕으로 생활습관 개선을 권장합니다."  # Fallback
+        
+        # Extract citations from chunks
         citations = []
+        for chunk in chunks[:3]:
+            doc_id = chunk.metadata.get("document_id", chunk.document_id)
+            if doc_id:
+                # Try to extract guideline name from document_id or metadata
+                guideline_name = chunk.metadata.get("guideline_name") or doc_id
+                citations.append(f"{guideline_name}" if guideline_name else chunk.chunk_id)
 
         return ExpectedQuestion(
             question=question,
-            recommended_answer=answer,
+            recommended_answer=answer or "일반적인 생활습관 가이드라인을 참고하여 상담하시면 좋습니다.",
             evidence_chunks=chunks,
             citations=citations,
         )
@@ -1135,12 +1215,41 @@ class RetrievalPipeline:
             chunks.sort(key=lambda c: getattr(c, "score", 0.0) or 0.0, reverse=True)
             chunks = chunks[:5]
 
-        answer = "권장 답변이 준비되었습니다."
+        # Generate actual answer using LLM
+        evidence_snippets = "\n".join(
+            f"- ({idx+1}) {chunk.chunk_id}: {chunk.text[:200]}"
+            for idx, chunk in enumerate(chunks[:3])
+        )
+        
+        prompt = (
+            "예상 질문에 대한 권장 답변을 작성하세요.\n"
+            "- 2-3문장으로 간결하게 답변\n"
+            "- 구체적인 행동 권장 포함 (예: 하루 30분, 주 5회)\n"
+            "- 제안의 톤 유지 ('~를 권장드립니다', '~하시면 좋습니다')\n"
+            "- 의학적 판단은 피하고 일반적인 가이드라인만 제공\n\n"
+            f"예상 질문: {question}\n\n"
+            f"근거:\n{evidence_snippets}\n\n"
+            "권장 답변:"
+        )
+
+        if self.small_llm:
+            response = self.small_llm.invoke([HumanMessage(content=prompt)])
+            answer = response.content.strip()
+        else:
+            answer = "근거 자료를 바탕으로 생활습관 개선을 권장합니다."  # Fallback
+        
+        # Extract citations from chunks
         citations = []
+        for chunk in chunks[:3]:
+            doc_id = chunk.metadata.get("document_id", chunk.document_id)
+            if doc_id:
+                # Try to extract guideline name from document_id or metadata
+                guideline_name = chunk.metadata.get("guideline_name") or doc_id
+                citations.append(f"{guideline_name}" if guideline_name else chunk.chunk_id)
 
         return ExpectedQuestion(
             question=question,
-            recommended_answer=answer,
+            recommended_answer=answer or "일반적인 생활습관 가이드라인을 참고하여 상담하시면 좋습니다.",
             evidence_chunks=chunks,
             citations=citations,
         )
@@ -1170,10 +1279,12 @@ class RetrievalPipeline:
 
         self._update_timings(state, "prep_delivery_examples", duration)
         base = self._base_state(state)
-        base.update({
-            "delivery_examples": delivery_examples,
-            "observations": observations,
-        })
+        base.update(
+            {
+                "delivery_examples": delivery_examples,
+                "observations": observations,
+            }
+        )
         return base
 
     def _node_prep_synthesize(self, state: dict) -> dict:
@@ -1207,10 +1318,12 @@ class RetrievalPipeline:
 
         self._update_timings(state, "prep_synthesis", duration)
         base = self._base_state(state)
-        base.update({
-            "preparation_analysis": prep_analysis,
-            "observations": observations,
-        })
+        base.update(
+            {
+                "preparation_analysis": prep_analysis,
+                "observations": observations,
+            }
+        )
         return base
 
     def __del__(self) -> None:  # pragma: no cover - best effort cleanup

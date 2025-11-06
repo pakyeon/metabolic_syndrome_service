@@ -1,101 +1,96 @@
-"""Lightweight LLM clients for small (SLLM) and main response generation."""
+"""LLM provider using LangChain-OpenAI directly without wrapper."""
 
 from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
-from typing import Callable
+from typing import Optional
 
 LOGGER = logging.getLogger(__name__)
 
-try:  # Optional dependency
-    from openai import OpenAI  # type: ignore
-except Exception:  # pragma: no cover - allow offline operation
-    OpenAI = None  # type: ignore[assignment]
+try:
+    from langchain_openai import ChatOpenAI
+except ImportError:
+    ChatOpenAI = None
+    LOGGER.warning("langchain-openai not installed; LLM features will be unavailable")
 
 
-@dataclass(slots=True)
-class LLMResponse:
-    """Structured LLM response wrapper."""
+def get_small_llm() -> Optional[ChatOpenAI]:
+    """Return configured small LLM (gpt-5-nano) for quick tasks like classification.
 
-    text: str
-    model: str
-    cached: bool = False
+    Returns:
+        ChatOpenAI instance or None if not available
+    """
+    if ChatOpenAI is None:
+        LOGGER.debug("ChatOpenAI not available (langchain-openai not installed)")
+        return None
 
-
-class LLMClient:
-    """LLM wrapper with graceful fallback when API credentials missing."""
-
-    def __init__(
-        self,
-        *,
-        model_name: str,
-        temperature: float = 0.2,
-        max_output_tokens: int = 256,
-        fallback: Callable[[str], str] | None = None,
-    ) -> None:
-        self._model_name = model_name
-        self._temperature = temperature
-        self._max_tokens = max_output_tokens
-        self._fallback = fallback or (lambda prompt: "")
-        self._enabled = False
-        self._client: OpenAI | None = None
-
-        api_key = os.getenv("OPENAI_API_KEY")
-        if OpenAI is not None and api_key:
-            try:
-                self._client = OpenAI(api_key=api_key)
-                self._enabled = True
-            except Exception as exc:  # pragma: no cover - network conditions
-                LOGGER.warning("OpenAI client init failed (%s); using fallback for %s", exc, model_name)
-        else:
-            LOGGER.debug("OpenAI client unavailable; using fallback for %s", model_name)
-
-    # ------------------------------------------------------------------
-    def complete(self, prompt: str) -> LLMResponse:
-        if not self._enabled or self._client is None:
-            return LLMResponse(text=self._fallback(prompt), model=self._model_name, cached=True)
-
-        try:  # pragma: no cover - external API
-            response = self._client.responses.create(
-                model=self._model_name,
-                input=prompt,
-                max_output_tokens=self._max_tokens,
-                temperature=self._temperature,
-            )
-            text = "".join(part.text for part in response.output_text if hasattr(part, "text"))
-            if not text.strip() and response.output:
-                text = response.output[0].content[0].text  # type: ignore[index]
-            return LLMResponse(text=text.strip(), model=self._model_name, cached=False)
-        except Exception as exc:  # pragma: no cover - external API
-            LOGGER.warning("LLM completion failed (%s); using fallback for %s", exc, self._model_name)
-            return LLMResponse(text=self._fallback(prompt), model=self._model_name, cached=True)
-
-
-# ----------------------------------------------------------------------
-# Factory helpers
-
-def _default_small_fallback(prompt: str) -> str:
-    return prompt.strip()
-
-
-def _default_main_fallback(prompt: str) -> str:
-    return "일반적인 생활습관 가이드를 참고하시고 필요 시 담당 의사와 상의해 주세요."
-
-
-def get_small_llm() -> LLMClient:
-    """Return configured small LLM client."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        LOGGER.debug("OPENAI_API_KEY not set; LLM features disabled")
+        return None
 
     model = os.getenv("SLLM_CHOICE", "gpt-5-nano")
-    return LLMClient(model_name=model, temperature=0.1, max_output_tokens=256, fallback=_default_small_fallback)
+
+    try:
+        # Configure model_kwargs for gpt-5 series
+        model_kwargs = {}
+        if "gpt-5" in model.lower() or "o1" in model.lower() or "o3" in model.lower():
+            model_kwargs["reasoning_effort"] = "minimal"
+
+        llm = ChatOpenAI(
+            model=model,
+            temperature=0.1,
+            max_tokens=256,
+            api_key=api_key,
+            model_kwargs=model_kwargs if model_kwargs else None,
+        )
+
+        LOGGER.info(f"Small LLM initialized: {model}")
+        return llm
+
+    except Exception as exc:
+        LOGGER.warning(f"Failed to initialize small LLM ({model}): {exc}")
+        return None
 
 
-def get_main_llm() -> LLMClient:
-    """Return configured main LLM client."""
+def get_main_llm() -> Optional[ChatOpenAI]:
+    """Return configured main LLM (gpt-5-mini) for primary response generation.
+
+    Returns:
+        ChatOpenAI instance or None if not available
+    """
+    if ChatOpenAI is None:
+        LOGGER.debug("ChatOpenAI not available (langchain-openai not installed)")
+        return None
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        LOGGER.debug("OPENAI_API_KEY not set; LLM features disabled")
+        return None
 
     model = os.getenv("LLM_CHOICE", "gpt-5-mini")
-    return LLMClient(model_name=model, temperature=0.2, max_output_tokens=512, fallback=_default_main_fallback)
+
+    try:
+        # Configure model_kwargs for gpt-5 series
+        model_kwargs = {}
+        if "gpt-5" in model.lower() or "o1" in model.lower() or "o3" in model.lower():
+            model_kwargs["reasoning_effort"] = "minimal"
+
+        llm = ChatOpenAI(
+            model=model,
+            temperature=0.2,
+            max_tokens=512,
+            api_key=api_key,
+            model_kwargs=model_kwargs if model_kwargs else None,
+        )
+
+        LOGGER.info(f"Main LLM initialized: {model}")
+        return llm
+
+    except Exception as exc:
+        LOGGER.warning(f"Failed to initialize main LLM ({model}): {exc}")
+        return None
 
 
-__all__ = ["LLMClient", "LLMResponse", "get_small_llm", "get_main_llm"]
+__all__ = ["get_small_llm", "get_main_llm"]

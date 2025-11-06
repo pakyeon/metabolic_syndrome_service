@@ -54,7 +54,7 @@ def configure_logging(level: int = logging.INFO) -> None:
         if _CONFIGURED:
             return
 
-        log_format = os.getenv("METABOLIC_LOG_FORMAT", "plain").lower()
+        log_format = os.getenv("LOG_FORMAT", "plain").lower()
         if log_format == "json":
             handler = logging.StreamHandler()
             handler.setFormatter(JSONFormatter())
@@ -69,4 +69,8 @@ def configure_logging(level: int = logging.INFO) -> None:
 
 def log_event(event: str, payload: dict | None = None, level: int = logging.INFO) -> None:
     logger = logging.getLogger("metabolic.observability")
-    logger.log(level, scrub_text(json.dumps(payload or {}, ensure_ascii=False)), extra={"event": event, "payload": payload or {}})
+    logger.log(
+        level,
+        scrub_text(json.dumps(payload or {}, ensure_ascii=False)),
+        extra={"event": event, "payload": payload or {}},
+    )

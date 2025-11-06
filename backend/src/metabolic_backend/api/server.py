@@ -21,7 +21,7 @@ from ..ingestion.pipeline import Chunk
 from ..logging_utils import log_event
 from ..metrics import latency_summary, record_latency
 from ..orchestrator import RetrievalPipeline, serialize_retrieval_output
-from .patients import router as patients_router
+from .patients_sqlite import router as patients_router  # Use SQLite instead of PostgreSQL
 from .sessions import router as sessions_router
 
 
@@ -51,7 +51,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    disable_ingestion = os.getenv("METABOLIC_DISABLE_INGESTION") is not None
+    disable_ingestion = os.getenv("DISABLE_INGESTION") is not None
 
     @lru_cache(maxsize=1)
     def get_pipeline() -> RetrievalPipeline:
@@ -166,11 +166,16 @@ def create_app() -> FastAPI:
             """Generate SSE events from LangGraph stream."""
             try:
                 start_total = time.perf_counter()
+                final_state = None
 
                 # Stream each node update from LangGraph
                 for chunk in pipeline.stream(question, context=payload.context, mode=mode):
                     # chunk format: {node_name: node_output}
                     for node_name, node_output in chunk.items():
+                        # Keep track of final state for completion event
+                        if node_name == "prep_synthesize" or (mode == "live" and node_name == "synthesize"):
+                            final_state = node_output
+                        
                         # Make node_output JSON-serializable
                         serializable_output = make_json_serializable(node_output)
 
@@ -181,11 +186,22 @@ def create_app() -> FastAPI:
                         }
                         yield f"data: {json.dumps(event_data)}\n\n"
 
-                # Send final completion event
+                # Generate final output for structured data
+                if final_state:
+                    # Run pipeline to get final RetrievalOutput
+                    final_output = pipeline.run(question, context=payload.context, mode=mode)
+                    serialized_output = serialize_retrieval_output(final_output)
+                else:
+                    # Fallback: run pipeline once more to get final output
+                    final_output = pipeline.run(question, context=payload.context, mode=mode)
+                    serialized_output = serialize_retrieval_output(final_output)
+
+                # Send final completion event with structured data
                 total_duration = time.perf_counter() - start_total
                 completion_data = {
                     "type": "complete",
-                    "total_duration": total_duration
+                    "total_duration": total_duration,
+                    "output": serialized_output
                 }
                 yield f"data: {json.dumps(completion_data)}\n\n"
 

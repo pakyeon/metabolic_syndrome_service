@@ -52,18 +52,16 @@ class IngestionPipeline:
         )
 
         self.database_url = os.getenv("DATABASE_URL")
-        self.vector_table = os.getenv("METABOLIC_VECTOR_TABLE", "document_chunks")
+        self.vector_table = os.getenv("VECTOR_TABLE", "document_chunks")
         self.vector_index_threshold = settings.vector_index_threshold
         self.neo4j_uri = os.getenv("NEO4J_URI", settings.neo4j_uri)
         self.neo4j_user = os.getenv("NEO4J_USER", settings.neo4j_user)
         self.neo4j_password = os.getenv("NEO4J_PASSWORD", settings.neo4j_password)
         self.use_vector_store = (
-            os.getenv("METABOLIC_USE_VECTOR_DB") is not None
-            and os.getenv("METABOLIC_DISABLE_VECTOR_DB") is None
+            os.getenv("USE_VECTOR_DB") is not None and os.getenv("DISABLE_VECTOR_DB") is None
         )
         self.use_graph_store = (
-            os.getenv("METABOLIC_USE_GRAPH_DB") is not None
-            and os.getenv("METABOLIC_DISABLE_GRAPH_DB") is None
+            os.getenv("USE_GRAPH_DB") is not None and os.getenv("DISABLE_GRAPH_DB") is None
         )
 
     # ------------------------------------------------------------------
