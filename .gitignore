@@ -106,7 +106,3 @@ coverage/
 .taskmaster/
 # Application data & generated datasets (keep outside VCS for privacy)
 app_data/
-data/documents/raw/
-data/documents/parsed/
-data/surveys/survey_data.json
-data/tests/test_data.json
