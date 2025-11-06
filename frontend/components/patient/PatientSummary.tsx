@@ -40,9 +40,9 @@ export function PatientSummary({
   return (
     <section className={`${styles.panel} ${styles.patientPanel}`} aria-labelledby="patient-summary">
       <header className={styles.panelHeader}>
-        <h2 id="patient-summary">Patient at a glance</h2>
+        <h2 id="patient-summary">환자 한눈에 보기</h2>
         <p style={{ margin: "0.25rem 0 0", color: "#5b6478" }}>
-          {name} · {age}세 · Last visit {visitDate}
+          {name} · {age}세 · 최근 방문 {visitDate}
         </p>
         <span
           style={{
@@ -64,12 +64,12 @@ export function PatientSummary({
                 riskLevel === "high" ? "#d7263d" : riskLevel === "moderate" ? "#ff8c42" : "#1a936f"
             }}
           />
-          Risk: {riskLevel.toUpperCase()}
+          위험도: {riskLevel === "high" ? "높음" : riskLevel === "moderate" ? "중간" : "낮음"}
         </span>
       </header>
       <div className={styles.panelBody}>
         <div style={{ marginBottom: "1.75rem" }}>
-          <h3 style={{ margin: "0 0 0.75rem", fontSize: "1rem" }}>Key biomarkers</h3>
+          <h3 style={{ margin: "0 0 0.75rem", fontSize: "1rem" }}>주요 바이오마커</h3>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "0.75rem" }}>
             {biomarkerHighlights.map((marker) => (
               <li
@@ -93,7 +93,7 @@ export function PatientSummary({
           </ul>
         </div>
         <div>
-          <h3 style={{ margin: "0 0 0.75rem", fontSize: "1rem" }}>Lifestyle signals</h3>
+          <h3 style={{ margin: "0 0 0.75rem", fontSize: "1rem" }}>생활 습관 신호</h3>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "0.75rem" }}>
             {lifestyleHighlights.map((note) => (
               <li key={note.title}>

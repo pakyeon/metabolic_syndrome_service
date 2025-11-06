@@ -37,6 +37,30 @@
   min-height: 100vh;
 }
 
+/* Dynamic layout adjustment for live mode */
+.workspace[data-mode="live"] {
+  grid-template-columns: 22rem minmax(0, 1fr) 18rem;
+}
+
+/* Dynamic layout when sidebar is collapsed */
+.workspace[data-sidebar-collapsed="true"] {
+  grid-template-columns: 22rem minmax(0, 1fr) 0;
+}
+
+.workspace[data-sidebar-collapsed="true"] .prepPanel {
+  display: none;
+}
+
+/* Pulse animation for highlighted questions */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
 .panel {
   background: #ffffffee;
   border-radius: 1rem;
@@ -45,6 +69,15 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* Sticky positioning for sidebar panels */
+.prepPanel,
+.patientPanel {
+  position: sticky;
+  top: 1.5rem;
+  max-height: calc(100vh - 3rem);
+  align-self: flex-start;
 }
 
 .panelHeader {

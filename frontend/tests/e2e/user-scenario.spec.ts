@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * E2E User Scenario Test: 신규 대사증후군 환자의 첫 상담
+ * E2E User Scenario Test: 신규 대사증후군 내담자의 첫 상담
  *
- * 시나리오: 상담사 이지원이 검진 결과 대사증후군 진단을 받은 김하늘 환자와 첫 상담을 진행
+ * 시나리오: 상담사 이지원이 검진 결과 대사증후군 진단을 받은 장유준 내담자와 첫 상담을 진행
  *
- * - 환자: 김하늘 (55세, 남성, BMI 28.5, 혈압 140/90, 공복혈당 180)
+ * - 내담자: 장유준 (55세, 남성, patient_id: 14)
  * - 상담사: 이지원 (경력 2년)
  */
 
@@ -19,35 +19,35 @@ test.describe('대사증후군 상담 전체 시나리오', () => {
     });
   });
 
-  test('신규 환자 첫 상담 워크플로우 (E2E)', async ({ page }) => {
+  test('신규 내담자 첫 상담 워크플로우 (E2E)', async ({ page }) => {
     // ============================================================
-    // Stage 1: 환자 선택 (환자 목록 UI)
+    // Stage 1: 내담자 선택 (내담자 목록 UI)
     // ============================================================
 
-    await test.step('환자 목록 페이지 접근', async () => {
-      await page.goto('http://localhost:3000/patients');
+    await test.step('내담자 목록 페이지 접근', async () => {
+      await page.goto('http://localhost:3000/');
 
       // 페이지 로딩 확인
-      await expect(page.locator('h1, h2')).toContainText(/환자 목록|Patient List/i);
+      await expect(page.locator('h1, h2')).toContainText(/내담자 목록|Patient List/i);
 
       // 테이블이 렌더링될 때까지 대기
       await page.waitForSelector('table', { timeout: 5000 });
     });
 
-    await test.step('환자 목록에서 김하늘 환자 선택', async () => {
-      // 김하늘 환자 행 찾기
-      const patientRow = page.locator('tr:has-text("김하늘")');
+    await test.step('내담자 목록에서 장유준 내담자 선택', async () => {
+      // 장유준 내담자 행 찾기
+      const patientRow = page.locator('tr:has-text("장유준")');
       await expect(patientRow).toBeVisible({ timeout: 10000 });
 
-      // 환자 정보 확인
+      // 내담자 정보 확인
       const rowText = await patientRow.textContent();
       expect(rowText).toContain('55'); // 나이
 
-      // 환자 클릭
+      // 내담자 클릭
       await patientRow.click();
 
       // Workspace로 이동 확인
-      await expect(page).toHaveURL(/patient_id=/, { timeout: 5000 });
+      await expect(page).toHaveURL(/\/workspace\?patient_id=/, { timeout: 5000 });
     });
 
     // ============================================================
@@ -55,12 +55,12 @@ test.describe('대사증후군 상담 전체 시나리오', () => {
     // ============================================================
 
     await test.step('상담 준비 페이지 로딩 확인', async () => {
-      // 환자 데이터 로딩 대기 (최대 5초)
+      // 내담자 데이터 로딩 대기 (최대 5초)
       await page.waitForTimeout(2000);
 
-      // 환자 이름이 화면에 표시되는지 확인
+      // 내담자 이름이 화면에 표시되는지 확인
       const pageContent = await page.textContent('body');
-      expect(pageContent).toContain('김하늘');
+      expect(pageContent).toContain('장유준');
     });
 
     await test.step('상담 준비 시작 버튼 클릭', async () => {
@@ -70,7 +70,7 @@ test.describe('대사증후군 상담 전체 시나리오', () => {
       await prepButton.click();
 
       // 진행 단계 표시 확인 (여러 가능성 중 하나라도 나타나면 성공)
-      await expect(page.locator('text=/환자 기록 검색 중|이전 상담 패턴|예상 질문 생성|권장 답변 준비|전달 방식 예시/i')).toBeVisible({ timeout: 3000 });
+      await expect(page.locator('text=/내담자 기록 검색 중|이전 상담 패턴|예상 질문 생성|권장 답변 준비|전달 방식 예시/i')).toBeVisible({ timeout: 3000 });
     });
 
     await test.step('상담 준비 완료 대기', async () => {
@@ -187,7 +187,7 @@ test.describe('대사증후군 상담 전체 시나리오', () => {
       console.log('✅ 전체 사용자 시나리오 테스트 완료');
       console.log('========================================');
       console.log('검증 항목:');
-      console.log('  ✓ 환자 목록 → 환자 선택');
+      console.log('  ✓ 내담자 목록 → 내담자 선택');
       console.log('  ✓ 상담 준비 → 진행 단계 표시');
       console.log('  ✓ PreparationSidebar 섹션');
       console.log('  ✓ 상담 시작 → 모드 전환');
@@ -203,8 +203,8 @@ test.describe('대사증후군 상담 전체 시나리오', () => {
   // ============================================================
 
   test('성능 SLA 검증 - Live Mode <5초', async ({ page }) => {
-    // 환자 페이지로 직접 이동 (환자 목록 건너뛰기)
-    await page.goto('http://localhost:3000/?patient_id=P0001');
+    // 내담자 페이지로 직접 이동 (내담자 목록 건너뛰기)
+    await page.goto('http://localhost:3000/workspace?patient_id=14');
 
     // 페이지 로딩 대기
     await page.waitForTimeout(3000);
@@ -245,7 +245,7 @@ test.describe('대사증후군 상담 전체 시나리오', () => {
   // ============================================================
 
   test('ReferencesPanel 조건부 렌더링 확인', async ({ page }) => {
-    await page.goto('http://localhost:3000/?patient_id=P0001');
+    await page.goto('http://localhost:3000/workspace?patient_id=14');
     await page.waitForTimeout(3000);
 
     // Live 모드로 전환

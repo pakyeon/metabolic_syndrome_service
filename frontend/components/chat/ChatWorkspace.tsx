@@ -27,6 +27,7 @@ type ChatWorkspaceProps = {
     detail: string;
   }[];
   activeTransparencyIndex: number;
+  currentStage?: string | null; // ChatGPT-style progress indicator
 };
 
 export function ChatWorkspace({
@@ -39,7 +40,8 @@ export function ChatWorkspace({
   isSubmitting,
   onSubmitPrompt,
   transparencyEvents,
-  activeTransparencyIndex
+  activeTransparencyIndex,
+  currentStage
 }: ChatWorkspaceProps) {
   const modeLabel = mode === "live" ? "Live counseling" : "Preparation";
   const modeColor = mode === "live" ? "#3541ff" : "#1a936f";
@@ -110,6 +112,43 @@ export function ChatWorkspace({
               </time>
             </article>
           ))}
+          {/* ChatGPT-style progress indicator */}
+          {isSubmitting && currentStage && (
+            <div
+              style={{
+                alignSelf: "flex-start",
+                maxWidth: "80%",
+                padding: "0.9rem 1.1rem",
+                borderRadius: "1rem 1rem 1rem 0.5rem",
+                background: "rgba(53, 97, 255, 0.04)",
+                border: "1px solid rgba(53, 97, 255, 0.1)",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+              }}
+            >
+              <div
+                style={{
+                  width: "1rem",
+                  height: "1rem",
+                  border: "2px solid #3541ff",
+                  borderTopColor: "transparent",
+                  borderRadius: "50%",
+                  animation: "spin 0.8s linear infinite",
+                }}
+              />
+              <span style={{ fontSize: "0.875rem", color: "#5b6478", fontWeight: 500 }}>
+                {currentStage}
+              </span>
+              <style jsx>{`
+                @keyframes spin {
+                  to {
+                    transform: rotate(360deg);
+                  }
+                }
+              `}</style>
+            </div>
+          )}
         </div>
         <form
           style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: "0.75rem" }}
@@ -123,6 +162,12 @@ export function ChatWorkspace({
           </label>
           <textarea
             id="prompt"
+            ref={(textarea) => {
+              // Store ref for keyboard shortcut
+              if (textarea) {
+                (window as any).__promptTextarea = textarea;
+              }
+            }}
             rows={4}
             placeholder="예: 식후 혈당이 160mg/dL인데 오늘 상담에서 무엇을 강조해야 할까요?"
             style={{
@@ -134,6 +179,13 @@ export function ChatWorkspace({
             }}
             value={draftPrompt}
             onChange={(event) => onPromptChange(event.target.value)}
+            onKeyDown={(event) => {
+              // Ctrl+Space shortcut to focus input
+              if (event.ctrlKey && event.key === ' ') {
+                event.preventDefault();
+                event.currentTarget.focus();
+              }
+            }}
           />
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button
@@ -154,7 +206,6 @@ export function ChatWorkspace({
             </button>
           </div>
         </form>
-        <TransparencyTimeline events={transparencyEvents} activeIndex={activeTransparencyIndex} />
       </div>
     </section>
   );

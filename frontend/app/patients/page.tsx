@@ -1,5 +1,6 @@
-import PatientList from '../../components/patient/PatientList';
+import { redirect } from 'next/navigation';
 
 export default function PatientsPage() {
-  return <PatientList />;
+  redirect('/');
 }
+

@@ -41,6 +41,7 @@ type PreparationSidebarProps = {
   expanded?: boolean;
   onToggle?: () => void;
   preparationAnalysis?: PreparationAnalysis | null;
+  highlightedQuestion?: string | null; // For highlighting matching questions
 };
 
 const statusBadgeColor: Record<NonNullable<Observation["status"]>, string> = {
@@ -57,7 +58,8 @@ export function PreparationSidebar({
   survey,
   expanded = true,
   onToggle,
-  preparationAnalysis
+  preparationAnalysis,
+  highlightedQuestion
 }: PreparationSidebarProps) {
   const getRiskLevelColor = (level?: string) => {
     switch (level?.toLowerCase()) {
@@ -118,10 +120,7 @@ export function PreparationSidebar({
       aria-labelledby="prep-notes"
     >
       <header className={styles.panelHeader} style={{ position: 'relative' }}>
-        <h2 id="prep-notes">Preparation insights</h2>
-        <p style={{ margin: "0.25rem 0 0", color: "#5b6478" }}>
-          Generated before the session to keep you one step ahead during live counseling.
-        </p>
+        <h2 id="prep-notes">상담 준비 인사이트</h2>
         {onToggle && (
           <button
             onClick={onToggle}
@@ -147,7 +146,7 @@ export function PreparationSidebar({
         {survey && (
           <section style={{ marginBottom: "1.75rem" }} aria-labelledby="patient-survey">
             <h3 id="patient-survey" style={{ margin: 0, fontSize: "1rem" }}>
-              환자 기초설문지
+              내담자 기초설문지
             </h3>
             <div style={{ marginTop: "1rem", display: "grid", gap: "0.75rem" }}>
               {survey.physical_activity && (
@@ -246,7 +245,7 @@ export function PreparationSidebar({
         {exam && (
           <section style={{ marginBottom: "1.75rem" }} aria-labelledby="patient-health">
             <h3 id="patient-health" style={{ margin: 0, fontSize: "1rem" }}>
-              환자 상태 (검사 결과)
+              내담자 상태 (검사 결과)
             </h3>
             <div style={{ marginTop: "1rem" }}>
               {/* Risk Level Badge */}
@@ -351,14 +350,23 @@ export function PreparationSidebar({
           </h3>
           {preparationAnalysis && preparationAnalysis.anticipatedQuestions.length > 0 ? (
             <ul style={{ listStyle: "none", padding: 0, margin: "1rem 0 0", display: "grid", gap: "1rem" }}>
-              {preparationAnalysis.anticipatedQuestions.map((qa, index) => (
+              {preparationAnalysis.anticipatedQuestions.map((qa, index) => {
+                // Check if this question matches the highlighted question
+                const isHighlighted = highlightedQuestion && 
+                  (qa.question.toLowerCase().includes(highlightedQuestion.toLowerCase()) ||
+                   highlightedQuestion.toLowerCase().includes(qa.question.toLowerCase()));
+                
+                return (
                 <li
                   key={index}
                   style={{
-                    border: "1px solid rgba(28, 35, 51, 0.1)",
+                    border: isHighlighted ? "2px solid #3541ff" : "1px solid rgba(28, 35, 51, 0.1)",
                     borderRadius: "0.9rem",
                     padding: "1rem",
-                    background: "#fff"
+                    background: isHighlighted ? "rgba(53, 65, 255, 0.05)" : "#fff",
+                    boxShadow: isHighlighted ? "0 4px 12px rgba(53, 65, 255, 0.2)" : "none",
+                    transition: "all 0.3s ease",
+                    animation: isHighlighted ? "pulse 2s ease-in-out infinite" : "none"
                   }}
                 >
                   <div style={{ marginBottom: "0.75rem" }}>
@@ -381,7 +389,8 @@ export function PreparationSidebar({
                     </div>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           ) : (
             <ul style={{ listStyle: "none", padding: 0, margin: "1rem 0 0", display: "grid", gap: "1rem" }}>

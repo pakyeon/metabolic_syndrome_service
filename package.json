@@ -1,0 +1,22 @@
+{
+  "name": "metabolic-syndrome-project",
+  "version": "0.1.0",
+  "private": true,
+  "description": "대사증후군 상담사 어시스턴트 - 통합 프로젝트",
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && uv run uvicorn metabolic_backend.api.server:app --host 0.0.0.0 --port 8000 --reload",
+    "dev:frontend": "cd frontend && npm run dev",
+    "start": "./start.sh",
+    "start:logs": "./start.sh --logs",
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "install:backend": "cd backend && uv sync",
+    "install:frontend": "cd frontend && npm install",
+    "test:backend": "cd backend && uv run pytest tests/",
+    "test:frontend": "cd frontend && npm run test:e2e"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
+

@@ -9,7 +9,7 @@ export default function PatientList() {
   const router = useRouter();
 
   const handlePatientClick = (patientId: string) => {
-    router.push(`/?patient_id=${patientId}`);
+    router.push(`/workspace?patient_id=${patientId}&autoStart=true`);
   };
 
   const formatDate = (dateString?: string) => {
@@ -53,7 +53,7 @@ export default function PatientList() {
     return (
       <div className={styles.container}>
         <div className={styles.loadingContainer}>
-          <p>환자 목록을 불러오는 중...</p>
+          <p>내담자 목록을 불러오는 중...</p>
         </div>
       </div>
     );
@@ -74,8 +74,8 @@ export default function PatientList() {
     return (
       <div className={styles.container}>
         <div className={styles.emptyState}>
-          <p>등록된 환자가 없습니다</p>
-          <small>환자 데이터를 추가해주세요.</small>
+          <p>등록된 내담자가 없습니다</p>
+          <small>내담자 데이터를 추가해주세요.</small>
         </div>
       </div>
     );
@@ -84,8 +84,8 @@ export default function PatientList() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1>환자 목록</h1>
-        <p>{patients.length}명의 환자 · 최근 검사 순으로 정렬</p>
+        <h1>내담자 목록</h1>
+        <p>{patients.length}명의 내담자 · 최근 검사 순으로 정렬</p>
       </div>
 
       <table className={styles.patientTable}>
